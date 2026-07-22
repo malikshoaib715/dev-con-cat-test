@@ -57,4 +57,28 @@ RSpec.describe "Tenant isolation" do
 
     expect(tenant_models).to all(be_scoped_by_tenant)
   end
+
+  # The one documented exception, and the controls that stand in for the default
+  # scope it does not have.
+  describe "User, which is deliberately not tenant-scoped" do
+    it "can be looked up with no tenant set, because authentication precedes tenancy" do
+      create(:user, account: solar, email: "dana@solarpro.example")
+
+      expect { User.find_by(email: "dana@solarpro.example") }.not_to raise_error
+    end
+
+    it "keeps email globally unique, so a lookup can never straddle two accounts" do
+      create(:user, account: solar, email: "shared@example.com")
+
+      expect(build(:user, account: medicare, email: "shared@example.com")).not_to be_valid
+    end
+
+    it "still isolates users when loaded the way the application loads them" do
+      mine = create(:user, account: solar)
+      theirs = create(:user, account: medicare)
+
+      expect(solar.users).to include(mine)
+      expect(solar.users).not_to include(theirs)
+    end
+  end
 end

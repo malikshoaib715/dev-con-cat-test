@@ -36,10 +36,12 @@ FactoryBot.define do
     active { true }
   end
 
+  # Tolerates an unknown key on purpose: specs need to build an invalid record to
+  # prove the registry validation and the database constraint both refuse it.
   factory :layer_definition do
     key { Layers::Registry.keys.first }
-    name { Layers::Registry.label(key) }
-    position { Layers::Registry.fetch(key).position }
+    name { Layers::Registry.key?(key) ? Layers::Registry.label(key) : key.to_s }
+    position { Layers::Registry.key?(key) ? Layers::Registry.fetch(key).position : 99 }
     cost_credits { 1 }
     criticality { "optional" }
     hard_stop_capable { false }
