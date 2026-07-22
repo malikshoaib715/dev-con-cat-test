@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html class="h-full bg-slate-50">
+  <head>
+    <title><%= content_for(:title) || "Super Pixel" %></title>
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <%= csrf_meta_tags %>
+    <%= csp_meta_tag %>
+
+    <%= yield :head %>
+
+    <link rel="icon" href="/icon.svg" type="image/svg+xml">
+
+    <%= stylesheet_link_tag "tailwind", "data-turbo-track": "reload" %>
+    <%= javascript_importmap_tags %>
+  </head>
+
+  <body class="h-full text-slate-900 antialiased">
+    <%= render "layouts/navigation" %>
+
+    <main class="mx-auto max-w-7xl px-6 py-8">
+      <%= render "layouts/flashes" %>
+      <%= yield %>
+    </main>
+  </body>
+</html>

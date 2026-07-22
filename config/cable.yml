@@ -1,0 +1,14 @@
+# Redis is already in the stack for Sidekiq, so Action Cable pub/sub costs no new
+# infrastructure. Test uses the async adapter so system specs exercise real delivery.
+development:
+  adapter: redis
+  url: <%= ENV.fetch("REDIS_URL") { "redis://localhost:6379/1" } %>
+  channel_prefix: super_pixel_development
+
+test:
+  adapter: async
+
+production:
+  adapter: redis
+  url: <%= ENV.fetch("REDIS_URL") { "redis://localhost:6379/1" } %>
+  channel_prefix: super_pixel_production

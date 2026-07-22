@@ -1,0 +1,30 @@
+<% content_for :title, "Sign in" %>
+
+<div class="mx-auto max-w-sm py-16">
+  <h1 class="text-xl font-semibold">Sign in</h1>
+  <p class="mt-1 text-sm text-slate-600">
+    Accounts are provisioned by the platform operator; there is no self-service sign-up.
+  </p>
+
+  <%= form_for(resource, as: resource_name, url: session_path(resource_name), html: { class: "mt-6 space-y-4" }) do |form| %>
+    <div>
+      <%= form.label :email, class: "block text-sm font-medium text-slate-700" %>
+      <%= form.email_field :email, autofocus: true, autocomplete: "email",
+                           class: "mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" %>
+    </div>
+
+    <div>
+      <%= form.label :password, class: "block text-sm font-medium text-slate-700" %>
+      <%= form.password_field :password, autocomplete: "current-password",
+                              class: "mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" %>
+    </div>
+
+    <label class="flex items-center gap-2 text-sm text-slate-600">
+      <%= form.check_box :remember_me %>
+      Remember me
+    </label>
+
+    <%= form.submit "Sign in",
+                    class: "w-full rounded-md bg-slate-900 px-3 py-2 text-sm font-semibold text-white hover:bg-slate-700" %>
+  <% end %>
+</div>
