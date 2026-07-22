@@ -1,9 +1,37 @@
-# This file should ensure the existence of records required to run the application in every environment (production,
-# development, test). The code here should be idempotent so that it can be executed at any point in every environment.
-# The data can then be loaded with the bin/rails db:seed command (or created alongside the database with db:setup).
+# Idempotent: every step is keyed on the fixtures' own identifiers, so re-running
+# `bin/rails db:seed` updates in place rather than duplicating.
 #
-# Example:
-#
-#   ["Action", "Comedy", "Drama", "Horror"].each do |genre_name|
-#     MovieGenre.find_or_create_by!(name: genre_name)
-#   end
+# Order matters. Layer definitions describe the policy the accounts are billed
+# against; policies decide what each account pays for; pixels advertise the
+# intersection.
+
+require_relative "seeds/mock_data"
+require_relative "seeds/layer_definitions"
+require_relative "seeds/accounts"
+require_relative "seeds/users"
+require_relative "seeds/layer_policies"
+require_relative "seeds/pixels"
+
+puts "Seeding from mock-data/ ..."
+
+Seeds::LayerDefinitions.load!
+Seeds::Accounts.load!
+Seeds::Users.load!
+Seeds::LayerPolicies.load!
+Seeds::Pixels.load!
+
+puts
+puts "Credit cost per verification run, by account:"
+Account.ordered_by_name.each do |account|
+  ActsAsTenant.with_tenant(account) do
+    purchased = account.layer_policies.enabled.pluck(:layer_key)
+    cost = LayerDefinition.where(key: purchased).sum(:cost_credits)
+    puts format("  %-22s %2d credits/run   balance %d", account.public_id, cost, account.credit_balance)
+  end
+end
+
+puts
+puts "Sign-in credentials (placeholders from mock-data/users.json):"
+Seeds::Users.credentials_table.each do |email, password, role|
+  puts format("  %-36s %-22s %s", email, password, role)
+end

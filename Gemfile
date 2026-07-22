@@ -20,7 +20,7 @@ gem "sidekiq"                     # background layer jobs, per-stage queues
 gem "redis", ">= 4.0.1"           # Sidekiq broker + Action Cable pub/sub
 gem "rack-cors"                   # the pixel is cross-origin by definition
 gem "rack-attack"                 # throttle the public pixel + login endpoints
-gem "pagy"                        # pagination for the CRM and audit explorer
+gem "pagy", "~> 9.3"              # pagination for the CRM and audit explorer
 
 gem "bootsnap", require: false
 

@@ -1,14 +1,33 @@
-Rails.application.routes.draw do
-  # Define your application routes per the DSL in https://guides.rubyonrails.org/routing.html
+require "sidekiq/web"
 
-  # Reveal health status on /up that returns 200 if the app boots with no exceptions, otherwise 500.
-  # Can be used by load balancers and uptime monitors to verify that the app is live.
+Rails.application.routes.draw do
   get "up" => "rails/health#show", as: :rails_health_check
 
-  # Render dynamic PWA files from app/views/pwa/* (remember to link manifest in application.html.erb)
-  # get "manifest" => "rails/pwa#manifest", as: :pwa_manifest
-  # get "service-worker" => "rails/pwa#service_worker", as: :pwa_service_worker
+  # Sessions only: users are seeded or invited, never self-registered.
+  devise_for :users, skip: %i[registrations passwords]
 
-  # Defines the root path route ("/")
-  # root "posts#index"
+  # Platform operators have no tenant of their own, so they land on the
+  # platform surface rather than an account dashboard.
+  authenticated :user, ->(user) { user.super_admin? } do
+    root to: redirect("/admin/sidekiq"), as: :platform_root
+  end
+
+  authenticated :user do
+    root "app/leads#index", as: :authenticated_root
+  end
+
+  devise_scope :user do
+    root to: "devise/sessions#new"
+  end
+
+  namespace :app do
+    resources :leads, only: %i[index]
+  end
+
+  # Never unauthenticated: the job console exposes lead payloads in job
+  # arguments. A routing constraint rather than an authenticate block, so a
+  # visitor without the role gets a 404 and is not told the console exists.
+  constraints ->(request) { request.env["warden"]&.user&.super_admin? } do
+    mount Sidekiq::Web => "/admin/sidekiq"
+  end
 end
