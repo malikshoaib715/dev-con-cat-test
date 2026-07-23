@@ -25,6 +25,7 @@ Rails.application.routes.draw do
   namespace :api do
     namespace :pixel do
       post "visit", to: "visits#create"
+      resources :leads, only: :create
     end
   end
 
