@@ -15,6 +15,18 @@ class Rack::Attack
     LoginAttempt.submitted_email(request) if LoginAttempt.submission?(request)
   end
 
+  # The pixel surface is public and abusable, and abuse arrives two ways. A
+  # compromised key hammering from a botnet is caught per key; someone rotating
+  # keys to stay under that limit is caught per source address. A busy landing
+  # page needs far more headroom than a login form, hence the higher ceilings.
+  throttle("pixel/key", limit: 60, period: 60.seconds) do |request|
+    PixelRequest.public_key(request) if PixelRequest.path?(request.path)
+  end
+
+  throttle("pixel/ip", limit: 120, period: 60.seconds) do |request|
+    request.ip if PixelRequest.path?(request.path)
+  end
+
   self.throttled_responder = lambda do |request|
     Current.request_id ||= request.env["action_dispatch.request_id"]
     Current.ip_address ||= request.ip
