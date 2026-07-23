@@ -75,16 +75,44 @@ RSpec.describe "Static seed data" do
     expect(User.find_by(email: "dana@solarpro.example").valid_password?("ChangeMe!sp1")).to be(true)
   end
 
+  describe "the vendor fixture store" do
+    before { load_provider_responses }
+
+    it "loads every provider file for every fixture lead" do
+      expect(ProviderResponse.count).to eq(Seeds::ProviderResponses::VENDOR_LAYER_KEYS.size * 12)
+      expect(ProviderResponse.distinct.pluck(:layer_key))
+        .to match_array(Layers::Registry.keys - %w[duplicate_detection])
+    end
+
+    # Duplicate detection is answered from the buyer's own CRM, so it has no
+    # vendor file to load and must not acquire one.
+    it "has nothing recorded for duplicate detection" do
+      expect(ProviderResponse.for_layer("duplicate_detection")).to be_empty
+    end
+
+    # Without the identity columns the gateway could only ever answer for the
+    # twelve seeded lead ids, and typing a persona into the live form would fall
+    # through to a clean default.
+    it "stamps each response with the normalized identity it describes" do
+      response = ProviderResponse.find_by!(layer_key: "dnc", lead_ref: "L-1005")
+
+      expect(response.phone_normalized).to eq("+18185550199")
+      expect(response.email_normalized).to eq("rvance.legal@protonmail.example")
+    end
+  end
+
   it "is idempotent: running it twice changes nothing" do
+    load_provider_responses
     counts = -> {
       ActsAsTenant.without_tenant do
         [ LayerDefinition.count, Account.count, User.count, LayerPolicy.count, Pixel.count,
-          CreditLedgerEntry.count ]
+          CreditLedgerEntry.count, ProviderResponse.count ]
       end
     }
     before_counts = counts.call
 
     load_static_seeds
+    load_provider_responses
 
     expect(counts.call).to eq(before_counts)
   end

@@ -26,6 +26,11 @@ module SuperPixel
     # Layer work is fanned out across Sidekiq queues (see config/sidekiq.yml).
     config.active_job.queue_adapter = :sidekiq
 
+    # Providers::Gateway stands in for the vendor HTTP calls. Only development
+    # pays the simulated latency that makes the live panel trickle; the suite and
+    # the seed run would otherwise spend their time asleep.
+    config.x.providers.simulated_latency = false
+
     config.generators do |generate|
       generate.system_tests = nil
       generate.helper false

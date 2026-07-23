@@ -4,6 +4,7 @@ require Rails.root.join("db/seeds/accounts")
 require Rails.root.join("db/seeds/users")
 require Rails.root.join("db/seeds/layer_policies")
 require Rails.root.join("db/seeds/pixels")
+require Rails.root.join("db/seeds/provider_responses")
 
 # Several specs need the real fixture accounts rather than factory ones, because
 # the arithmetic under test (cost per run, credit balances, which layers an
@@ -27,6 +28,41 @@ module SeedLoading
 
   def load_layer_definitions
     without_stdout { Seeds::LayerDefinitions.load! }
+  end
+
+  def load_provider_responses
+    without_stdout { Seeds::ProviderResponses.load! }
+  end
+
+  # A lead built from one of the twelve fixture personas, carrying the same
+  # identity and public id the provider fixtures are keyed by.
+  def fixture_lead(lead_ref, account: nil, **overrides)
+    attributes = Seeds::MockData.read("leads.json").fetch("leads").find { |lead| lead["lead_id"] == lead_ref }
+    raise ArgumentError, "no fixture lead #{lead_ref}" if attributes.nil?
+
+    account ||= fixture_account(attributes.fetch("account_id"))
+    as_tenant(account) do
+      create(:lead, **fixture_lead_attributes(attributes, account), **overrides)
+    end
+  end
+
+  def fixture_lead_attributes(attributes, account)
+    {
+      account: account,
+      pixel: fixture_pixel_for(account) || create(:pixel, account: account),
+      public_id: attributes.fetch("lead_id"),
+      first_name: attributes.fetch("first_name"),
+      last_name: attributes.fetch("last_name"),
+      email: attributes.fetch("email"),
+      email_normalized: Leads::Normalizer.email(attributes.fetch("email")),
+      phone: attributes.fetch("phone"),
+      phone_normalized: Leads::Normalizer.phone(attributes.fetch("phone")),
+      ip_address: attributes.fetch("ip_address"),
+      user_agent: attributes.fetch("user_agent"),
+      page_url: attributes.fetch("landing_page_url"),
+      form_dwell_ms: attributes.fetch("form_dwell_ms"),
+      submitted_at: attributes.fetch("captured_at")
+    }
   end
 
   def fixture_account(public_id)

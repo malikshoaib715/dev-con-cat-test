@@ -11,6 +11,7 @@ require_relative "seeds/accounts"
 require_relative "seeds/users"
 require_relative "seeds/layer_policies"
 require_relative "seeds/pixels"
+require_relative "seeds/provider_responses"
 
 puts "Seeding from mock-data/ ..."
 
@@ -19,6 +20,7 @@ Seeds::Accounts.load!
 Seeds::Users.load!
 Seeds::LayerPolicies.load!
 Seeds::Pixels.load!
+Seeds::ProviderResponses.load!
 
 puts
 puts "Credit cost per verification run, by account:"

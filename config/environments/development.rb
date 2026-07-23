@@ -71,4 +71,9 @@ Rails.application.configure do
 
   # Raise error when a before_action's only/except options reference missing actions.
   config.action_controller.raise_on_missing_callback_actions = true
+
+  # Let the demo panel fill in layer by layer the way it will against real
+  # vendors, instead of all ten rows appearing at once. `db:seed` turns this off
+  # around its own ingestion run.
+  config.x.providers.simulated_latency = true
 end
