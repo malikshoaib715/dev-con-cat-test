@@ -58,10 +58,23 @@ module Layers
     end
 
     def expired?
-      expires_at = payload["expires_at"]
-      return false if expires_at.blank?
+      expires_at = parsed_expiry
+      return false if expires_at.nil?
 
-      Time.zone.parse(expires_at.to_s) < lead.submitted_at
+      expires_at < lead.submitted_at
+    end
+
+    # An expiry the vendor sent in a shape we cannot read is not evidence that the
+    # certificate expired, so it is not reported as such. Left unparsed the
+    # comparison would raise, and a malformed field on one certificate would take
+    # the whole layer down into `errored` rather than describing what it found.
+    def parsed_expiry
+      raw = payload["expires_at"]
+      return nil if raw.blank?
+
+      Time.zone.parse(raw.to_s)
+    rescue ArgumentError
+      nil
     end
   end
 end

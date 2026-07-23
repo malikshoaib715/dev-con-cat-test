@@ -57,6 +57,32 @@ RSpec.describe Api::Pixel::BaseController, type: :controller do
     expect(envelope["code"]).to eq("not_found")
   end
 
+  # A number too large for its column is the visitor's input, not our bug, and
+  # §7.6 rules out answering a buyer's landing page with a 500 for it.
+  it "answers a value outside its column's range with 422" do
+    get :index, params: { raise: "ActiveModel::RangeError" }
+
+    expect(response).to have_http_status(:unprocessable_content)
+    expect(envelope["code"]).to eq("value_out_of_range")
+  end
+
+  it "answers a body it cannot parse with 400" do
+    get :index, params: { raise: "ActionDispatch::Http::Parameters::ParseError" }
+
+    expect(response).to have_http_status(:bad_request)
+    expect(envelope["code"]).to eq("malformed_body")
+  end
+
+  # ParameterMissing is Rails' exception and carries no `code` of its own, so a
+  # handler that asked it for one would raise inside itself and take the request
+  # out through the catch-all it exists to prevent.
+  it "answers a missing parameter with 422 rather than raising inside the handler" do
+    get :index, params: { raise: "ActionController::ParameterMissing" }
+
+    expect(response).to have_http_status(:unprocessable_content)
+    expect(envelope["code"]).to eq("parameter_missing")
+  end
+
   it "answers anything unexpected with 500 and never leaks the internals" do
     get :index, params: { raise: "NoMethodError" }
 
@@ -71,6 +97,46 @@ RSpec.describe Api::Pixel::BaseController, type: :controller do
 
     events = ActsAsTenant.without_tenant { AuditEvent.of_type(Audit::Events::API_REQUEST_REJECTED) }
     expect(events.first.payload["error_class"]).to eq("NoMethodError")
+  end
+
+  # §6's rule is that if it happened there is a row for it. A stolen snippet run
+  # from a domain its owner never allowed, or a key that no longer exists, is
+  # exactly what a buyer asks about weeks later, and it used to leave no trace.
+  describe "the trail a refused call leaves" do
+    def rejections
+      ActsAsTenant.without_tenant { AuditEvent.of_type(Audit::Events::API_REQUEST_REJECTED) }
+    end
+
+    {
+      "Errors::PixelNotAuthorized" => [ "pixel_not_authorized", 401 ],
+      "Errors::OriginNotAllowed" => [ "origin_not_allowed", 403 ],
+      "Errors::ValidationFailed" => [ "validation_failed", 422 ],
+      "ActionDispatch::Http::Parameters::ParseError" => [ "malformed_body", 400 ],
+      "ActiveModel::RangeError" => [ "value_out_of_range", 422 ],
+      "ActiveRecord::RecordNotFound" => [ "not_found", 404 ]
+    }.each do |error_class, (code, status)|
+      it "records the #{status} it answered #{error_class.demodulize} with" do
+        get :index, params: { raise: error_class }
+
+        expect(rejections.sole.payload).to include("code" => code, "status" => status)
+      end
+    end
+
+    it "records the path, and never the body that was posted" do
+      get :index, params: { raise: "Errors::OriginNotAllowed", email: "visitor@example.com" }
+
+      payload = rejections.sole.payload
+      expect(payload).to have_key("path")
+      expect(payload.to_json).not_to include("visitor@example.com")
+    end
+
+    # Not a rejection: the call was understood and the balance was the problem,
+    # which credits.insufficient and lead.on_hold already record in full.
+    it "leaves an insufficient balance to the events that describe it properly" do
+      get :index, params: { raise: "Errors::InsufficientCredits" }
+
+      expect(rejections).to be_empty
+    end
   end
 
   # Every envelope carries the same three keys. The request id is supplied by

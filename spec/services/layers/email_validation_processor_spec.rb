@@ -82,4 +82,17 @@ RSpec.describe Layers::EmailValidationProcessor do
       expect(outcome.signals).to be_empty
     end
   end
+
+  # An empty payload used to satisfy "nobody said deliverable" and so counted as
+  # both providers reporting undeliverable — this layer's heaviest signal, scored
+  # against a lead on no evidence at all. The phone layer answers the mirror image
+  # of this case the same way.
+  it "reports a vendor that returned no providers as a check that did not run" do
+    outcome = process_payload({ "providers" => {} })
+
+    expect(outcome.status).to eq("not_applicable")
+    expect(outcome.panel_verdict).to eq("skip")
+    expect(outcome.detail).to eq("no provider responses")
+    expect(outcome.signals).to be_empty
+  end
 end

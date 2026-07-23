@@ -3,7 +3,8 @@
 *.gem
 .bundle/
 vendor/bundle/
-log/*.log
+log/*
+!log/.keep
 tmp/
 .byebug_history
 

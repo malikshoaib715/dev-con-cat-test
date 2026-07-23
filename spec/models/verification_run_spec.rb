@@ -40,14 +40,57 @@ RSpec.describe VerificationRun do
     end
   end
 
+  # What "stuck" has to mean is "nothing is working on this any more". Status alone
+  # cannot say that: a `running` run whose worker was killed mid-layer looks
+  # exactly like one that is mid-flight, and Sidekiq only redelivers jobs that
+  # raised — a killed worker's job is simply gone. Looking only at `pending` left
+  # every one of those runs unrecoverable.
   describe ".stuck" do
-    it "finds runs that were never dispatched, so they can be re-driven" do
+    def run_with_layer(status:, claim_status:, claimed_at: nil, created_at: 1.hour.ago)
+      run = create(:verification_run, account: account, status: status, created_at: created_at)
+      create(:layer_result, account: account, verification_run: run, layer_key: "anura",
+                            status: claim_status, started_at: claimed_at)
+      run
+    end
+
+    it "finds a run that was never dispatched" do
       never_dispatched = create(:verification_run, account: account, lead: lead,
                                                    status: "pending", created_at: 1.hour.ago)
-      create(:verification_run, account: account, status: "pending", created_at: 1.second.ago)
-      create(:verification_run, account: account, status: "running", created_at: 1.hour.ago)
 
-      expect(described_class.stuck).to contain_exactly(never_dispatched)
+      expect(described_class.stuck).to include(never_dispatched)
+    end
+
+    it "leaves a run that has only just been created alone" do
+      just_created = create(:verification_run, account: account, status: "pending", created_at: 1.second.ago)
+
+      expect(described_class.stuck).not_to include(just_created)
+    end
+
+    it "finds a running run whose worker died holding a claim" do
+      abandoned = run_with_layer(status: "running", claim_status: "processing", claimed_at: 1.hour.ago)
+
+      expect(described_class.stuck).to include(abandoned)
+    end
+
+    # The half-dispatched fan-out: some jobs reached the queue, the rest did not,
+    # and nothing will ever pick the remainder up.
+    it "finds a running run whose layers were never picked up" do
+      undispatched = run_with_layer(status: "running", claim_status: "pending")
+
+      expect(described_class.stuck).to include(undispatched)
+    end
+
+    it "leaves a run alone while a worker still holds a fresh claim" do
+      working = run_with_layer(status: "running", claim_status: "processing", claimed_at: 30.seconds.ago)
+
+      expect(described_class.stuck).not_to include(working)
+    end
+
+    it "leaves runs that have already reached an outcome alone" do
+      finalizing = run_with_layer(status: "finalizing", claim_status: "completed")
+      completed  = run_with_layer(status: "completed",  claim_status: "completed")
+
+      expect(described_class.stuck).not_to include(finalizing, completed)
     end
   end
 end

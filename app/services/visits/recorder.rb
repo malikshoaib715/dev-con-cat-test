@@ -10,6 +10,13 @@ module Visits
   # The first one wins and a retry is a no-op — never a 500, and never a second
   # event on the timeline.
   class Recorder < ApplicationService
+    # The panel renders field focus/blur churn client-side and only this summary
+    # is ever persisted (§6). Capping it is the same protection one level down: a
+    # looping or hostile page must not be able to write an unbounded document into
+    # a single row. Truncated rather than refused, because a beacon that fails is
+    # a beacon that breaks somebody's landing page.
+    MAX_INTERACTIONS = 100
+
     def initialize(pixel:, attributes:, ip_address:, user_agent:)
       @pixel = pixel
       @attributes = attributes
@@ -47,7 +54,7 @@ module Visits
         session_id: session_id,
         page_url: @attributes[:page_url],
         referrer: @attributes[:referrer],
-        interactions: @attributes[:interactions] || [],
+        interactions: Array(@attributes[:interactions]).first(MAX_INTERACTIONS),
         started_at: @attributes[:started_at].presence || Time.current,
         ip_address: @ip_address,
         user_agent: @user_agent

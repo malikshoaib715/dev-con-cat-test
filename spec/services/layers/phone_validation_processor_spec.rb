@@ -95,4 +95,22 @@ RSpec.describe Layers::PhoneValidationProcessor do
     expect(outcome.verdict).to eq("consensus_invalid")
     expect(outcome.detail).to eq("3/3 providers say the number is invalid")
   end
+
+  # No answers is not a consensus. Falling through to the pass branch reported
+  # "0/0 providers valid" as a cleared check — a pass on the certificate earned by
+  # an empty payload rather than by anyone actually looking the number up.
+  it "reports a vendor that returned no providers as a check that did not run" do
+    outcome = process_payload({ "providers" => {} })
+
+    expect(outcome.status).to eq("not_applicable")
+    expect(outcome.panel_verdict).to eq("skip")
+    expect(outcome.detail).to eq("no provider responses")
+    expect(outcome.signals).to be_empty
+  end
+
+  it "reports a payload missing the providers key the same way" do
+    outcome = process_payload({})
+
+    expect(outcome.status).to eq("not_applicable")
+  end
 end

@@ -164,6 +164,20 @@ RSpec.describe "POST /api/pixel/visit" do
       )
     end
 
+    # §6 keeps focus/blur churn off the audit spine by only ever persisting a
+    # summary. The same protection is needed one level down: a looping or hostile
+    # page must not be able to write an unbounded document into a single row.
+    # Truncated rather than refused, because a beacon that fails is a beacon that
+    # breaks somebody's landing page.
+    it "caps a flood of interactions instead of storing whatever it is sent" do
+      flood = Array.new(5_000) { |index| { name: "field#{index}", action: "focus", at: index.to_s } }
+
+      beacon(body: { interactions: flood })
+
+      expect(response).to have_http_status(:accepted)
+      expect(visits.sole.interactions.size).to eq(Visits::Recorder::MAX_INTERACTIONS)
+    end
+
     it "records the beacon on the audit spine, attributed to the pixel" do
       beacon
 

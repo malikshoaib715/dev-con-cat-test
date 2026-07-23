@@ -9,6 +9,7 @@ module Layers
   # the phone. The verdict is capped by the score, not vetoed.
   class EmailValidationProcessor < BaseProcessor
     def call
+      return no_provider_answers if providers.empty?
       return undeliverable if undeliverable?
       return disposable if disposable?
       return providers_split if split_on_deliverability?
@@ -17,6 +18,13 @@ module Layers
     end
 
     private
+
+    # No answers is not the same as two answers of "undeliverable", which is what
+    # counting an empty payload would otherwise produce — the heaviest signal this
+    # layer has, on no evidence at all.
+    def no_provider_answers
+      not_applicable(detail: "no provider responses")
+    end
 
     # Both signals are emitted when both hold: an undeliverable address on a
     # throwaway domain is worse than either alone, and the engine should see both

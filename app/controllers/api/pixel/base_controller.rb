@@ -10,14 +10,19 @@ module Api
 
       # Rails matches rescue_from handlers last-registered-first, so the catch-all
       # is declared first and every specific mapping below overrides it.
-      rescue_from StandardError,                     with: :render_internal_error
-      rescue_from ActiveRecord::RecordNotFound,      with: :render_not_found
-      rescue_from ActiveRecord::RecordInvalid,       with: :render_record_invalid
-      rescue_from ActionController::ParameterMissing, with: :render_unprocessable
-      rescue_from Errors::ValidationFailed,          with: :render_unprocessable
-      rescue_from Errors::InsufficientCredits,       with: :render_payment_required
-      rescue_from Errors::OriginNotAllowed,          with: :render_origin_not_allowed
-      rescue_from Errors::PixelNotAuthorized,        with: :render_unauthorized
+      rescue_from StandardError,                      with: :render_internal_error
+      rescue_from ActiveRecord::RecordNotFound,       with: :render_not_found
+      rescue_from ActiveRecord::RecordInvalid,        with: :render_record_invalid
+      # A visitor's own input must never reach the catch-all: a number too large
+      # for its column and a body that is not JSON are both bad requests, and a
+      # 500 on a buyer's landing page is the one thing §7.6 rules out.
+      rescue_from ActiveModel::RangeError,            with: :render_out_of_range
+      rescue_from ActionDispatch::Http::Parameters::ParseError, with: :render_malformed_body
+      rescue_from ActionController::ParameterMissing, with: :render_missing_parameter
+      rescue_from Errors::ValidationFailed,           with: :render_unprocessable
+      rescue_from Errors::InsufficientCredits,        with: :render_payment_required
+      rescue_from Errors::OriginNotAllowed,           with: :render_origin_not_allowed
+      rescue_from Errors::PixelNotAuthorized,         with: :render_unauthorized
 
       # Correlation first, so even a rejected call is traceable to the session
       # that made it; then who is calling; then whether they may call from there.
@@ -72,29 +77,63 @@ module Api
         }, status: status
       end
 
+      # Every refused call leaves a row. A stolen snippet being run from a domain
+      # its owner never allowed, or a key that no longer exists, is exactly the
+      # kind of thing a buyer asks us about weeks later, and §6's rule is that if
+      # it happened there is an AuditEvent for it. Only the code and the path are
+      # recorded — never the body, which is the visitor's own data.
+      def render_rejection(code:, message:, status:)
+        Audit::Recorder.record!(
+          Audit::Events::API_REQUEST_REJECTED,
+          payload: { code: code, status: Rack::Utils.status_code(status), path: request.path }
+        )
+        render_error code: code, message: message, status: status
+      end
+
       def render_unauthorized(error)
-        render_error code: error.code, message: "Unknown or inactive pixel key.", status: :unauthorized
+        render_rejection code: error.code, message: "Unknown or inactive pixel key.", status: :unauthorized
       end
 
       def render_origin_not_allowed(error)
-        render_error code: error.code, message: "This origin is not allowed for this pixel.", status: :forbidden
+        render_rejection code: error.code, message: "This origin is not allowed for this pixel.", status: :forbidden
       end
 
+      # Not a rejection: the call was understood and the buyer's balance is the
+      # problem. `credits.insufficient` and `lead.on_hold` already tell that story
+      # with the detail it deserves.
       def render_payment_required(error)
         render_error code: error.code, message: error.message, status: :payment_required
       end
 
       def render_unprocessable(error)
-        render_error code: error.code, message: error.message, status: :unprocessable_content
+        render_rejection code: error.code, message: error.message, status: :unprocessable_content
       end
 
       def render_record_invalid(error)
-        render_error code: "validation_failed", message: error.record.errors.full_messages.to_sentence,
-                     status: :unprocessable_content
+        render_rejection code: "validation_failed", message: error.record.errors.full_messages.to_sentence,
+                         status: :unprocessable_content
+      end
+
+      # Deliberately not `error.code`: this one is Rails', not ours, and does not
+      # carry a code — asking it for one would raise inside the handler and take
+      # the request out through the catch-all it exists to avoid.
+      def render_missing_parameter(error)
+        render_rejection code: "parameter_missing", message: "#{error.param} is required.",
+                         status: :unprocessable_content
+      end
+
+      def render_out_of_range(_error)
+        render_rejection code: "value_out_of_range", message: "A submitted value is outside its permitted range.",
+                         status: :unprocessable_content
+      end
+
+      def render_malformed_body(_error)
+        render_rejection code: "malformed_body", message: "Request body could not be parsed.",
+                         status: :bad_request
       end
 
       def render_not_found(_error)
-        render_error code: "not_found", message: "Not found.", status: :not_found
+        render_rejection code: "not_found", message: "Not found.", status: :not_found
       end
 
       # Internals never leak to a buyer's landing page; the request id is the

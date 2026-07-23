@@ -9,11 +9,6 @@
 class VerificationLayerJob < ApplicationJob
   queue_as :layers
 
-  # A worker that died mid-layer would otherwise leave its row `processing`
-  # forever, and the run would never finalize. After this long, a claim is assumed
-  # abandoned and may be taken again.
-  STALE_CLAIM_AFTER = 5.minutes
-
   ERROR_MESSAGE_LIMIT = 500
 
   # Declared here as well as in ApplicationJob so that exhausting the retries is a
@@ -86,10 +81,14 @@ class VerificationLayerJob < ApplicationJob
     row
   end
 
+  # A worker that died mid-layer would otherwise leave its row `processing`
+  # forever, and the run would never finalize; past LayerResult::STALE_CLAIM_AFTER
+  # its claim is assumed abandoned and may be taken again.
   def claimable(run, layer_key)
     run.layer_results
        .where(layer_key: layer_key)
-       .where("status = 'pending' OR (status = 'processing' AND started_at < ?)", STALE_CLAIM_AFTER.ago)
+       .where("status = 'pending' OR (status = 'processing' AND started_at < ?)",
+              LayerResult::STALE_CLAIM_AFTER.ago)
   end
 
   # Only ever undoes this job's own claim: the status condition means a row that has

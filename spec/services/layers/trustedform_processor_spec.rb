@@ -84,4 +84,31 @@ RSpec.describe Layers::TrustedformProcessor do
       expect(outcome.panel_verdict).to eq("pass")
     end
   end
+
+  # An expiry we cannot read is not evidence that the certificate expired. Left
+  # unparsed the comparison raised, so one malformed field took the whole layer
+  # into `errored` — and because TrustedForm is a required layer, that caps the
+  # lead at REVIEW for a vendor's formatting mistake.
+  describe "an expiry the vendor sent in a shape we cannot read" do
+    it "describes what it can instead of raising" do
+      outcome = process_payload({
+        "status" => "mismatch", "matches_phone" => false, "matches_email" => true,
+        "consent_language_present" => true, "expires_at" => "not-a-date"
+      })
+
+      expect(outcome.verdict).to eq("mismatch")
+      expect(outcome.detail).to include("certificate phone does not match")
+      expect(outcome.detail).not_to include("expired")
+    end
+
+    it "does not call an otherwise sound certificate expired" do
+      outcome = process_payload({
+        "status" => "verified", "matches_phone" => true, "matches_email" => true,
+        "consent_language_present" => true, "expires_at" => "2026-13-45T99:00:00Z"
+      })
+
+      expect(outcome.verdict).to eq("verified")
+      expect(outcome.panel_verdict).to eq("pass")
+    end
+  end
 end

@@ -13,6 +13,7 @@ module Layers
     DISSENT_THRESHOLD = 2
 
     def call
+      return no_provider_answers if providers.empty?
       return consensus_invalid if invalid_providers.size >= DISSENT_THRESHOLD
       return providers_disagree if invalid_providers.any?
       return consensus_voip if line_types == [ VOIP ]
@@ -26,6 +27,14 @@ module Layers
     end
 
     private
+
+    # A vendor that returned no provider answers has not judged this number. That
+    # is a check which did not run, not a number that passed — reporting it as a
+    # valid consensus would put a cleared check on the certificate on the strength
+    # of an empty payload.
+    def no_provider_answers
+      not_applicable(detail: "no provider responses")
+    end
 
     def consensus_invalid
       completed(

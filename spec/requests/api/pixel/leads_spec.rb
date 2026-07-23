@@ -75,8 +75,23 @@ RSpec.describe "POST /api/pixel/leads" do
       expect(lead.pixel_id).to eq(pixel.id)
       expect(lead.status).to eq("verifying")
       expect(lead.full_name).to eq("Maria Gonzalez")
-      expect(lead.submitted_at).to eq(Time.utc(2026, 7, 14, 15, 2, 11))
       expect(lead.form_dwell_ms).to eq(48_210)
+    end
+
+    # The payload's own `submitted_at` is read by the reference snippet and ignored
+    # by us. It is an input to scoring — the duplicate layer's recency window and
+    # TrustedForm's expiry check both compare against it — and a page can claim any
+    # value it likes, so the capture time is ours to record and not theirs to
+    # assert. The address and user agent are refused for the same reason.
+    it "timestamps the capture from our own clock, not the page's claim" do
+      expect(leads.sole.submitted_at).to be_within(1.minute).of(Time.current)
+    end
+
+    it "cannot be told a lead was captured decades from now" do
+      submit(body: { session_id: "sess_future", submitted_at: "2099-01-01T00:00:00Z" })
+
+      lead = as_tenant(account) { Lead.find_by!(session_id: "sess_future") }
+      expect(lead.submitted_at).to be_within(1.minute).of(Time.current)
     end
 
     # Identity is stored twice: as the visitor typed it, and normalized for
@@ -93,6 +108,25 @@ RSpec.describe "POST /api/pixel/leads" do
 
     it "takes the address from the connection, not the payload" do
       expect(leads.sole.ip_address).to eq("76.14.201.33")
+    end
+
+    # A field left as whitespace is an absent field. Stored verbatim it looked
+    # like an address while normalizing to nothing, so it would match no CRM
+    # record and no fixture — data that reads as present and behaves as missing.
+    it "stores a field the visitor left as whitespace as absent" do
+      submit(body: { session_id: "sess_blank", fields: { email: "   " } })
+
+      lead = as_tenant(account) { Lead.find_by!(session_id: "sess_blank") }
+      expect(lead.email).to be_nil
+      expect(lead.email_normalized).to be_nil
+      expect(lead.raw_payload).to include("email" => "   ")
+    end
+
+    it "still refuses a lead whose only identity is whitespace" do
+      submit(body: { session_id: "sess_all_blank", fields: { email: "  ", phone: " " } })
+
+      expect(response).to have_http_status(:unprocessable_content)
+      expect(envelope["message"]).to include("email address or a phone number")
     end
 
     it "keeps the submitted payload for later dispute" do
@@ -268,11 +302,31 @@ RSpec.describe "POST /api/pixel/leads" do
       expect(leads.count).to eq(1)
     end
 
+    # A retried or double-clicked submission carries the same identity it sent the
+    # first time, so the page that submitted still gets its token back.
     it "still hands back a usable stream token, so a reloaded page can resubscribe" do
       submit
 
       expect(Realtime::StreamToken.lead_public_id(response.parsed_body.fetch("stream_token")))
         .to eq(leads.sole.public_id)
+    end
+
+    # Session ids are generated on the page — the reference pixel builds one from
+    # Date.now and Math.random — so knowing one is not proof of having submitted
+    # the lead behind it. The idempotent answer is still given, because that costs
+    # nothing; a capability to watch a stranger's verification is not.
+    it "withholds the stream token from a replay that cannot show it submitted the lead" do
+      submit(body: { fields: { email: "attacker@evil.example.com", phone: "+15550000000" } })
+
+      expect(response).to have_http_status(:ok)
+      expect(response.parsed_body).to include("lead_id" => leads.sole.public_id, "replayed" => true)
+      expect(response.parsed_body).not_to have_key("stream_token")
+    end
+
+    it "withholds it from a replay carrying no identity at all" do
+      submit(body: { fields: { first_name: nil, last_name: nil, email: nil, phone: nil, consent: nil } })
+
+      expect(response.parsed_body).not_to have_key("stream_token")
     end
 
     it "charges nothing the second time" do
@@ -343,6 +397,35 @@ RSpec.describe "POST /api/pixel/leads" do
       expect(envelope["message"]).to include("email address or a phone number")
       expect(leads.count).to eq(0)
       expect(account.reload.credit_balance).to eq(25_000)
+    end
+
+    # Whatever a visitor's browser sends, the answer is a 4xx the page can reason
+    # about. §7.6's rule is that the pixel never breaks the host page, and a 500
+    # on a buyer's landing page is exactly that failure.
+    it "refuses a number too large for its column with 422, not 500" do
+      submit(body: { form_dwell_ms: 99_999_999_999_999 })
+
+      expect(response).to have_http_status(:unprocessable_content)
+      expect(envelope).to include("code" => "value_out_of_range")
+      expect(leads.count).to eq(0)
+    end
+
+    it "refuses a body that is not JSON with 400, not 500" do
+      post "/api/pixel/leads", params: "}not json{",
+           headers: { "CONTENT_TYPE" => "application/json",
+                      PixelRequest::KEY_HEADER => pixel.public_key,
+                      "HTTP_ORIGIN" => allowed_origin }
+
+      expect(response).to have_http_status(:bad_request)
+      expect(envelope).to include("code" => "malformed_body")
+    end
+
+    it "leaves a trail for a refused call, so a buyer debugging an embed is not guessing" do
+      submit(origin: "https://stolen-snippet.example.com")
+
+      event = ActsAsTenant.without_tenant { AuditEvent.of_type(Audit::Events::API_REQUEST_REJECTED).sole }
+      expect(event.payload).to include("code" => "origin_not_allowed", "status" => 403)
+      expect(event.account_id).to eq(account.id)
     end
 
     it "refuses a pixel configured to run no layers at all" do
