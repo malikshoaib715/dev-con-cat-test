@@ -5,6 +5,7 @@ require Rails.root.join("db/seeds/users")
 require Rails.root.join("db/seeds/layer_policies")
 require Rails.root.join("db/seeds/pixels")
 require Rails.root.join("db/seeds/provider_responses")
+require Rails.root.join("db/seeds/crm_records")
 
 # Several specs need the real fixture accounts rather than factory ones, because
 # the arithmetic under test (cost per run, credit balances, which layers an
@@ -28,6 +29,10 @@ module SeedLoading
 
   def load_layer_definitions
     without_stdout { Seeds::LayerDefinitions.load! }
+  end
+
+  def load_crm_records
+    without_stdout { Seeds::CrmRecords.load! }
   end
 
   def load_provider_responses(layer_keys: Seeds::ProviderResponses::VENDOR_LAYER_KEYS)
