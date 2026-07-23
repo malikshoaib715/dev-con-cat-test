@@ -65,8 +65,14 @@ RSpec.describe "Pixel edge protection" do
     # surface: a real flood through the whole stack, answered in the same
     # envelope as every other pixel failure and recorded for later querying.
     it "cuts off a key that floods the surface, and says so in the usual envelope" do
-      (key_throttle.limit + 1).times do
-        post endpoint, headers: { PixelRequest::KEY_HEADER => "pk_flooding", "REMOTE_ADDR" => "203.0.113.9" }
+      # Rack::Attack counts into a bucket per period, so a flood that straddles a
+      # bucket boundary is legitimately split across two of them. Pinning the
+      # clock keeps the assertion about the limit rather than about the wall time
+      # the example happened to start at.
+      freeze_time do
+        (key_throttle.limit + 1).times do
+          post endpoint, headers: { PixelRequest::KEY_HEADER => "pk_flooding", "REMOTE_ADDR" => "203.0.113.9" }
+        end
       end
 
       expect(response).to have_http_status(:too_many_requests)

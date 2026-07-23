@@ -20,6 +20,14 @@ Rails.application.routes.draw do
     root to: "devise/sessions#new"
   end
 
+  # The public, cross-origin pixel surface. Authenticated by pixel key, not by
+  # session, and protected by CORS + rack-attack (config/initializers).
+  namespace :api do
+    namespace :pixel do
+      post "visit", to: "visits#create"
+    end
+  end
+
   namespace :app do
     resources :leads, only: %i[index]
   end

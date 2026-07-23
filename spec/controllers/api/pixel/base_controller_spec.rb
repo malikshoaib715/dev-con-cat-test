@@ -14,6 +14,13 @@ RSpec.describe Api::Pixel::BaseController, type: :controller do
     response.parsed_body["error"]
   end
 
+  # This spec is about the envelope, not about who may reach an action: the key
+  # and origin checks are proven end to end in spec/requests/api/pixel/.
+  before do
+    allow(controller).to receive(:authenticate_pixel!)
+    allow(controller).to receive(:enforce_origin!)
+  end
+
 
   it "answers an unknown or inactive pixel key with 401" do
     get :index, params: { raise: "Errors::PixelNotAuthorized" }

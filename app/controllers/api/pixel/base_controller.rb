@@ -10,15 +10,61 @@ module Api
 
       # Rails matches rescue_from handlers last-registered-first, so the catch-all
       # is declared first and every specific mapping below overrides it.
-      rescue_from StandardError,                with: :render_internal_error
-      rescue_from ActiveRecord::RecordNotFound, with: :render_not_found
-      rescue_from ActiveRecord::RecordInvalid,  with: :render_record_invalid
-      rescue_from Errors::ValidationFailed,     with: :render_unprocessable
-      rescue_from Errors::InsufficientCredits,  with: :render_payment_required
-      rescue_from Errors::OriginNotAllowed,     with: :render_origin_not_allowed
-      rescue_from Errors::PixelNotAuthorized,   with: :render_unauthorized
+      rescue_from StandardError,                     with: :render_internal_error
+      rescue_from ActiveRecord::RecordNotFound,      with: :render_not_found
+      rescue_from ActiveRecord::RecordInvalid,       with: :render_record_invalid
+      rescue_from ActionController::ParameterMissing, with: :render_unprocessable
+      rescue_from Errors::ValidationFailed,          with: :render_unprocessable
+      rescue_from Errors::InsufficientCredits,       with: :render_payment_required
+      rescue_from Errors::OriginNotAllowed,          with: :render_origin_not_allowed
+      rescue_from Errors::PixelNotAuthorized,        with: :render_unauthorized
+
+      # Correlation first, so even a rejected call is traceable to the session
+      # that made it; then who is calling; then whether they may call from there.
+      before_action :correlate_session
+      before_action :authenticate_pixel!
+      before_action :enforce_origin!
 
       private
+
+      def current_pixel
+        Current.pixel
+      end
+
+      def correlate_session
+        Current.session_id = params[:session_id].presence
+      end
+
+      # The account is derived from the key and nothing else. A payload may carry
+      # any `pixel_id` or `account_id` it likes; none of it is read here, which is
+      # what makes posting a lead into someone else's account impossible.
+      #
+      # `::Pixel` is deliberate: inside `Api::Pixel` a bare `Pixel` resolves to
+      # this namespace, not the model.
+      def authenticate_pixel!
+        pixel = find_pixel_by_key
+        raise Errors::PixelNotAuthorized if pixel.nil?
+
+        Current.pixel = pixel
+        Current.account = pixel.account
+        ActsAsTenant.current_tenant = pixel.account
+      end
+
+      def find_pixel_by_key
+        public_key = request.headers[PixelRequest::KEY_HEADER].presence
+        return nil if public_key.nil?
+
+        # No tenant is set yet: the key is what establishes one.
+        ActsAsTenant.without_tenant { ::Pixel.active.find_by(public_key: public_key) }
+      end
+
+      # A key is public by nature — it ships inside a script tag on a public page.
+      # The domain allowlist is what stops a stolen snippet from being run from
+      # somewhere its owner never authorised.
+      def enforce_origin!
+        origin = request.origin.presence || request.referer.presence
+        raise Errors::OriginNotAllowed unless current_pixel.allows_origin?(origin)
+      end
 
       def render_error(code:, message:, status:)
         render json: {
