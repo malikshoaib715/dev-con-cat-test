@@ -39,7 +39,13 @@ module Seeds
       "blacklist_alliance" => {
         "suspected" => -25
       },
-      "dnc" => {},
+      # A closed callback window is a timing problem, not a compliance one: it is
+      # surfaced to whoever works the lead and costs nothing. Weighted at zero
+      # explicitly rather than omitted, so every signal a processor can emit has a
+      # defined weight and a typo cannot hide as "no weight found".
+      "dnc" => {
+        "window_closed" => 0
+      },
       "phone_validation" => {
         "consensus_invalid" => -30,
         "providers_disagree" => -20,

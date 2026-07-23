@@ -30,8 +30,22 @@ module SeedLoading
     without_stdout { Seeds::LayerDefinitions.load! }
   end
 
-  def load_provider_responses
-    without_stdout { Seeds::ProviderResponses.load! }
+  def load_provider_responses(layer_keys: Seeds::ProviderResponses::VENDOR_LAYER_KEYS)
+    without_stdout { Seeds::ProviderResponses.load!(layer_keys: layer_keys) }
+  end
+
+  # What a single layer's processor needs and no more: the fixture accounts and
+  # pixels its personas belong to, the seeded weights, and that one provider's
+  # recorded answers. Loading all nine providers and every user per example costs
+  # the suite more than it proves.
+  def load_layer_fixtures(layer_key)
+    without_stdout do
+      Seeds::LayerDefinitions.load!
+      Seeds::Accounts.load!
+      Seeds::LayerPolicies.load!
+      Seeds::Pixels.load!
+      Seeds::ProviderResponses.load!(layer_keys: [ layer_key ]) if layer_key.in?(Seeds::ProviderResponses::VENDOR_LAYER_KEYS)
+    end
   end
 
   # A lead built from one of the twelve fixture personas, carrying the same

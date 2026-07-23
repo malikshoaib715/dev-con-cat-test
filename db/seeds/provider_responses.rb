@@ -10,10 +10,12 @@ module Seeds
     # from the buyer's own crm_records.
     VENDOR_LAYER_KEYS = (Layers::Registry.keys - %w[duplicate_detection]).freeze
 
-    def self.load!
+    # A single layer can be reloaded on its own, which is what you want when one
+    # provider file changes rather than all nine.
+    def self.load!(layer_keys: VENDOR_LAYER_KEYS)
       identities = lead_identities
 
-      VENDOR_LAYER_KEYS.each do |layer_key|
+      layer_keys.each do |layer_key|
         MockData.read("providers", "#{layer_key}.json").fetch("results").each do |lead_ref, payload|
           upsert(layer_key, lead_ref, payload, identities.fetch(lead_ref, {}))
         end
