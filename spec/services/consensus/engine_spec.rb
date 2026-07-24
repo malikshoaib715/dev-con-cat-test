@@ -123,6 +123,11 @@ RSpec.describe Consensus::Engine do
       expect(scored(-400).verdict).to eq("reject")
     end
 
+    it "clamps at 100 when a buyer reweights a signal positive" do
+      expect(scored(50).score).to eq(100)
+      expect(scored(50).verdict).to eq("accept")
+    end
+
     it "moves the bands when the buyer overrides the thresholds" do
       decision = scored(-20, settings: { "accept_threshold" => 90, "review_threshold" => 50 })
 

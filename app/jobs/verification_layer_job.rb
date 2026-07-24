@@ -24,9 +24,19 @@ class VerificationLayerJob < ApplicationJob
 
     in_context(run) do
       row = claim(run, layer_key)
-      # Somebody else is already on it, or it has already finished. Either way
-      # there is nothing to do and nothing to complain about.
-      next if row.nil?
+
+      if row.nil?
+        # Somebody else is on it, or it has already finished — but a redelivery
+        # landing here may be the retry of the exact delivery that crashed between
+        # persisting the last outcome and checking completion, and without this the
+        # run would sit finished-but-`running` forever: every future redelivery
+        # would find the row terminal and decline the claim too. The check is the
+        # right thing on every nil-claim path — outstanding work and an
+        # already-claimed run both answer no, and only a finished, unclaimed run
+        # moves.
+        check_for_completion(run)
+        next
+      end
 
       record_layer_outcome(run, row, Layers::Registry.processor_for(layer_key).call(lead: run.lead))
       check_for_completion(run)

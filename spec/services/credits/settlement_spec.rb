@@ -108,6 +108,24 @@ RSpec.describe Credits::Settlement do
     end
   end
 
+  describe "two settlements racing the same run", :real_transactions do
+    # Both may pass the already-settled check before either commits; the unique
+    # (verification_run_id, entry_type) index arbitrates, the loser's transaction
+    # rolls back — including its balance update — and it reports a no-op.
+    it "refunds once and keeps the balance equal to the ledger" do
+      load_static_seeds
+      run = funded_run("acct_medicareedge", layer_states: { "voice" => "not_applicable" })
+
+      results = in_parallel(2, tenant: run.account) { described_class.call(run: run) }
+
+      expect(results.map(&:success?)).to all(be(true))
+      as_tenant(run.account) do
+        expect(run.credit_ledger_entries.entry_type_settlement_refund.count).to eq(1)
+        expect(run.account.reload.credit_balance).to eq(run.account.credit_ledger_entries.sum(:amount))
+      end
+    end
+  end
+
   describe "the ledger invariant" do
     it "keeps the balance equal to the sum of the ledger" do
       run = funded_run("acct_solarpro", layer_states: { "enrichment" => "errored" })

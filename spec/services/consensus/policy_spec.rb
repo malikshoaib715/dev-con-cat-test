@@ -162,6 +162,26 @@ RSpec.describe Consensus::Policy do
       expect(policy.accept_threshold).to eq(85)
       expect(policy.review_threshold).to eq(50)
     end
+
+    it "reads an override stored as a numeric string" do
+      account.update!(settings: { "accept_threshold" => "85" })
+
+      expect(policy_for(account).accept_threshold).to eq(85)
+    end
+
+    # "abc".to_i is 0, and 0 is truthy — so before Integer() this yielded an
+    # accept threshold of zero and every lead that escaped a hard stop accepted.
+    it "falls back to the default when an override does not parse as a number" do
+      account.update!(settings: { "accept_threshold" => "definitely high" })
+
+      expect(policy_for(account).accept_threshold).to eq(70)
+    end
+
+    it "truncates a float override to whole points" do
+      account.update!(settings: { "accept_threshold" => 85.9 })
+
+      expect(policy_for(account).accept_threshold).to eq(85)
+    end
   end
 
   describe "#snapshot" do

@@ -56,6 +56,21 @@ RSpec.describe Credits::BurnRate do
     expect(runway.days_to_zero).to eq(2.8)
   end
 
+  it "reads a seeded burn stored as a string" do
+    account.update!(settings: { "avg_daily_burn" => "250" })
+
+    expect(runway.daily_burn).to eq(250.0)
+  end
+
+  # This runs inside settlement, inside every finalization: a corrupt value must
+  # read as "no seeded burn", never crash the account's every run.
+  it "treats a corrupt seeded burn as no burn at all" do
+    account.update!(settings: { "avg_daily_burn" => { "oops" => true } })
+
+    expect(runway.daily_burn).to eq(0.0)
+    expect(runway.days_to_zero).to eq(Float::INFINITY)
+  end
+
   it "reports an endless runway rather than dividing by zero" do
     account.update!(settings: {})
 

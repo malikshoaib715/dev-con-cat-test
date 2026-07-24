@@ -51,8 +51,11 @@ module Credits
       @recent_movements ||= @account.credit_ledger_entries.spending.since(WINDOW.ago).pluck(:amount)
     end
 
+    # Float(), not to_f: this runs inside settlement, inside every finalization,
+    # and settings is jsonb — a corrupt value would otherwise crash every run for
+    # the account rather than read as "no seeded burn".
     def seeded_burn
-      @account.settings["avg_daily_burn"].to_f
+      Float(@account.settings["avg_daily_burn"], exception: false) || 0.0
     end
   end
 end

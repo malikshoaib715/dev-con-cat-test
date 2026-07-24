@@ -181,6 +181,41 @@ RSpec.describe VerificationLayerJob do
     end
   end
 
+  describe "a redelivery of a claim nobody holds" do
+    # The post-crash state: the last outcome committed, then the completion check
+    # died before it ran. All rows terminal, run still `running`. The redelivery
+    # finds the row terminal and declines the claim — and must still check
+    # completion, or the run sits finished-but-running forever: every future
+    # redelivery would decline too, and Sidekiq only redelivers jobs that raised.
+    it "finalizes a finished run whose completion check crashed" do
+      run = build_run(%w[anura])
+      as_tenant(run.account) do
+        run.layer_results.sole.update!(status: "completed", verdict: "good",
+                                       raw_response: { "signals" => [] })
+      end
+
+      described_class.perform_now(run.id, "anura")
+
+      expect(run.reload.status).to eq("finalizing")
+    end
+
+    # The same nil-claim path must stay inert once the run has an outcome: the
+    # gate's compare-and-set only claims from pending/running, so a zombie retry
+    # arriving after finalization changes nothing.
+    it "leaves a run that already finalized untouched" do
+      run = build_run(%w[anura])
+      described_class.perform_now(run.id, "anura")
+      expect(run.reload.status).to eq("finalizing")
+      touched_at = run.updated_at
+
+      described_class.perform_now(run.id, "anura")
+
+      expect(run.reload.status).to eq("finalizing")
+      expect(run.updated_at).to eq(touched_at)
+      expect(enqueued_jobs.select { |job| job[:job] == FinalizeRunJob }.size).to eq(1)
+    end
+  end
+
   describe "a layer whose provider is unavailable" do
     let(:run) { build_run(%w[anura dnc]) }
 

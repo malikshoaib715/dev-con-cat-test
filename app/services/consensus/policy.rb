@@ -130,8 +130,12 @@ module Consensus
       @definitions[layer_key]
     end
 
+    # Integer(), not to_i: settings is jsonb with no interface guarding it yet, and
+    # "abc".to_i is 0 — which is truthy, so the default never applies and an accept
+    # threshold of zero accepts every lead that escapes a hard stop. A value that
+    # does not parse as a whole number is treated as not set.
     def threshold(override, default)
-      override.presence&.to_i || default
+      Integer(override, exception: false) || default
     end
   end
 end

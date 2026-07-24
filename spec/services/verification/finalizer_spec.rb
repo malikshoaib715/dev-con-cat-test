@@ -165,6 +165,27 @@ RSpec.describe Verification::Finalizer do
   end
 
   describe "a delivery that resumes a half-finished finalization" do
+    # One step earlier than the case below: the certificate exists but the bill was
+    # never settled. The failed re-issue leaves an unsaved certificate in the
+    # ACCOUNT's association target this time; settlement's account.lock! reloads
+    # the row and must clear it before its own account.update! autosaves the
+    # corpse into the same unique index.
+    it "settles and closes a run that crashed between certificate and settlement" do
+      run = claimed_run
+      as_tenant(run.account) do
+        verdict = create(:consensus_verdict, account: run.account, verification_run: run,
+                                             policy_snapshot: { "engine_version" => "1.0" })
+        Certificates::Issuer.call(run: run, consensus_verdict: verdict)
+      end
+
+      expect(finalize(run)).to be_success
+      expect(run.reload.status).to eq("completed")
+      as_tenant(run.account) do
+        expect(ConsentCertificate.where(verification_run_id: run.id).count).to eq(1)
+        expect(run.credit_ledger_entries.entry_type_settlement_refund.count).to eq(1)
+      end
+    end
+
     # The crash this survives: the certificate was issued and the bill settled, but
     # the process died before the run was closed. The redelivery has to finish the
     # job on the very objects that already did half of it — which is why the issuer
@@ -244,6 +265,33 @@ RSpec.describe Verification::Finalizer do
 
       expect(run.reload.status).to eq("completed")
       expect(as_tenant(account) { run.consent_certificate }).to be_present
+    end
+
+    # The promise the CRM append exists to keep, end to end: an accepted unknown
+    # identity enters the buyer's CRM, and the same person on a new session is
+    # refused as an exact duplicate that names the first lead.
+    it "rejects tomorrow's resubmission of a lead accepted today" do
+      account = fixture_account("acct_solarpro")
+      pixel = fixture_pixel_for(account)
+      identity = { first_name: "Nadia", last_name: "Osei",
+                   email: "nadia.osei@example.com", phone: "+13105557001" }
+
+      first = second = nil
+      perform_enqueued_jobs do
+        as_tenant(account) do
+          first = Leads::IngestionService.call(pixel: pixel,
+            attributes: { session_id: "probe-day-1", fields: identity }).value.lead
+          second = Leads::IngestionService.call(pixel: pixel,
+            attributes: { session_id: "probe-day-2", fields: identity }).value.lead
+        end
+      end
+
+      expect(first.reload.verdict).to eq("accept")
+      expect(second.reload.verdict).to eq("reject")
+      expect(second.flags).to include("duplicate")
+      verdict = as_tenant(account) { second.verification_run.consensus_verdict }
+      expect(verdict.hard_stop_layer).to eq("duplicate_detection")
+      expect(verdict.reasons.first).to include(first.public_id)
     end
   end
 end
