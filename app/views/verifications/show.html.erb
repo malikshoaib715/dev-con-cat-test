@@ -1,0 +1,126 @@
+<% content_for :title, "Consent certificate #{@certificate.public_id}" %>
+<% evidence = @certificate.evidence %>
+
+<div class="mx-auto max-w-4xl">
+  <% if @report.valid? %>
+    <div class="rounded-lg border border-emerald-300 bg-emerald-50 px-5 py-4">
+      <p class="text-lg font-semibold text-emerald-900">VALID</p>
+      <p class="mt-1 text-sm text-emerald-800">
+        The evidence below hashes to the digest recorded when this certificate was issued,
+        and its place in this account's chain is intact.
+      </p>
+    </div>
+  <% else %>
+    <div class="rounded-lg border border-rose-300 bg-rose-50 px-5 py-4">
+      <p class="text-lg font-semibold text-rose-900">TAMPERED</p>
+      <p class="mt-1 text-sm text-rose-800">
+        <%= @report.hash_valid ? "The evidence still matches its own digest, but this certificate no longer follows the one before it." : "The evidence stored against this certificate does not match the digest recorded when it was issued." %>
+      </p>
+    </div>
+  <% end %>
+
+  <div class="mt-6 rounded-lg border border-slate-200 bg-white p-5">
+    <div class="flex items-baseline justify-between">
+      <div>
+        <h1 class="text-xl font-semibold">Consent certificate</h1>
+        <p class="font-mono text-xs text-slate-500"><%= @certificate.public_id %></p>
+      </div>
+      <%= verdict_badge(@certificate.verdict) %>
+    </div>
+
+    <dl class="mt-5 grid grid-cols-2 gap-4 text-sm sm:grid-cols-3">
+      <div>
+        <dt class="text-xs uppercase tracking-wide text-slate-500">Lead</dt>
+        <dd class="font-mono"><%= evidence.dig("lead", "public_id") %></dd>
+      </div>
+      <div>
+        <dt class="text-xs uppercase tracking-wide text-slate-500">Score</dt>
+        <dd><%= evidence.dig("consensus", "score") %> / 100</dd>
+      </div>
+      <div>
+        <dt class="text-xs uppercase tracking-wide text-slate-500">Issued</dt>
+        <dd><%= @certificate.issued_at.strftime("%d %b %Y %H:%M UTC") %></dd>
+      </div>
+      <div>
+        <dt class="text-xs uppercase tracking-wide text-slate-500">Captured from</dt>
+        <dd class="truncate"><%= evidence.dig("pixel", "page_url") %></dd>
+      </div>
+      <div>
+        <dt class="text-xs uppercase tracking-wide text-slate-500">Visit / submit IP</dt>
+        <dd><%= evidence.dig("session", "visit_ip") || "—" %> / <%= evidence.dig("session", "submit_ip") || "—" %></dd>
+      </div>
+      <div>
+        <dt class="text-xs uppercase tracking-wide text-slate-500">Chain position</dt>
+        <dd>#<%= @certificate.sequence_number %></dd>
+      </div>
+    </dl>
+
+    <% if evidence.dig("trustedform", "reference").present? %>
+      <p class="mt-4 break-all text-xs text-slate-500">
+        TrustedForm: <%= evidence.dig("trustedform", "reference") %>
+        (<%= evidence.dig("trustedform", "status") || "not checked" %>)
+      </p>
+    <% end %>
+  </div>
+
+  <div class="mt-6 rounded-lg border border-slate-200 bg-white p-5">
+    <h2 class="text-sm font-semibold uppercase tracking-wide text-slate-500">Why</h2>
+    <ul class="mt-3 space-y-1 text-sm text-slate-700">
+      <% Array(evidence.dig("consensus", "reasons")).each do |reason| %>
+        <li><%= reason %></li>
+      <% end %>
+    </ul>
+
+    <% if Array(evidence.dig("consensus", "flags")).any? %>
+      <p class="mt-3 text-xs text-slate-500">
+        Flags: <%= Array(evidence.dig("consensus", "flags")).join(", ") %>
+      </p>
+    <% end %>
+  </div>
+
+  <div class="mt-6 overflow-hidden rounded-lg border border-slate-200 bg-white">
+    <table class="min-w-full divide-y divide-slate-200 text-sm">
+      <thead class="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
+        <tr>
+          <th class="px-4 py-3 font-medium">Check</th>
+          <th class="px-4 py-3 font-medium">State</th>
+          <th class="px-4 py-3 font-medium">Answer</th>
+          <th class="px-4 py-3 font-medium">Score</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-slate-100">
+        <% Layers::Registry.entries.each do |entry| %>
+          <% layer = evidence.dig("layers", entry.key) || {} %>
+          <tr>
+            <td class="px-4 py-3 font-medium"><%= entry.label %></td>
+            <td class="px-4 py-3 text-slate-600"><%= layer["status"]&.humanize %></td>
+            <td class="px-4 py-3 text-slate-600"><%= layer["detail"] || "—" %></td>
+            <td class="px-4 py-3 text-slate-600"><%= layer["score_delta"] || "—" %></td>
+          </tr>
+        <% end %>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="mt-6 rounded-lg border border-slate-200 bg-white p-5 text-xs">
+    <h2 class="text-sm font-semibold uppercase tracking-wide text-slate-500">Integrity</h2>
+    <dl class="mt-3 space-y-2">
+      <div>
+        <dt class="text-slate-500">Recorded digest</dt>
+        <dd class="break-all font-mono"><%= @certificate.evidence_hash %></dd>
+      </div>
+      <div>
+        <dt class="text-slate-500">Recomputed from the evidence above</dt>
+        <dd class="break-all font-mono <%= @report.hash_valid ? "text-slate-700" : "text-rose-700" %>">
+          <%= @report.expected_hash %>
+        </dd>
+      </div>
+      <div>
+        <dt class="text-slate-500">Previous certificate's digest</dt>
+        <dd class="break-all font-mono <%= @report.chain_valid ? "text-slate-700" : "text-rose-700" %>">
+          <%= @certificate.previous_hash || "— first certificate issued to this account" %>
+        </dd>
+      </div>
+    </dl>
+  </div>
+</div>

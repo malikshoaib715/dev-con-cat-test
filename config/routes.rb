@@ -20,6 +20,10 @@ Rails.application.routes.draw do
     root to: "devise/sessions#new"
   end
 
+  # Public by design: a consent certificate only anyone can check is worth
+  # checking. The unguessable cert_… id is the capability.
+  get "verify/:public_id", to: "verifications#show", as: :verify_certificate
+
   # The public, cross-origin pixel surface. Authenticated by pixel key, not by
   # session, and protected by CORS + rack-attack (config/initializers).
   namespace :api do
