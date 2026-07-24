@@ -1,0 +1,58 @@
+# frozen_string_literal: true
+
+module Credits
+  # How fast this account is spending, and how long it has left.
+  #
+  # Measured from the ledger rather than from a stored figure, so it reflects what
+  # actually happened this week. A brand-new account has no week to measure, and
+  # falls back to the burn its plan was sold on — reporting "infinite runway" for
+  # an account that simply has not spent yet would tell the super-admin dashboard
+  # the opposite of the truth.
+  class BurnRate
+    WINDOW = 7.days
+
+    Runway = Data.define(:daily_burn, :days_to_zero)
+
+    def self.call(account:)
+      new(account: account).call
+    end
+
+    # An account spending nothing never runs out. Said explicitly because the
+    # alternative is a division by zero in the one place a dashboard reads.
+    def self.days_to_zero(balance:, daily_burn:)
+      return Float::INFINITY unless daily_burn.positive?
+
+      balance / daily_burn.to_f
+    end
+
+    def initialize(account:)
+      @account = account
+    end
+
+    def call
+      Runway.new(
+        daily_burn: daily_burn,
+        days_to_zero: self.class.days_to_zero(balance: @account.credit_balance, daily_burn: daily_burn)
+      )
+    end
+
+    private
+
+    def daily_burn
+      return seeded_burn if recent_movements.empty?
+
+      (-recent_movements.sum / WINDOW.in_days).round(2)
+    end
+
+    # Reservations are negative and refunds positive, so their sum is the net spend
+    # — a run whose layers were half refunded cost this account half as much.
+    # Grants and adjustments are not spending and are deliberately excluded.
+    def recent_movements
+      @recent_movements ||= @account.credit_ledger_entries.spending.since(WINDOW.ago).pluck(:amount)
+    end
+
+    def seeded_burn
+      @account.settings["avg_daily_burn"].to_f
+    end
+  end
+end

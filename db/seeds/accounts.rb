@@ -22,7 +22,11 @@ module Seeds
         monthly_credit_allowance: attributes.fetch("monthly_credit_allowance"),
         cycle_start: attributes.fetch("cycle_start"),
         cycle_end: attributes.fetch("cycle_end"),
-        billing_email: attributes.fetch("billing_contact")
+        billing_email: attributes.fetch("billing_contact"),
+        # The burn Credits::BurnRate falls back to until the account has a week of
+        # ledger history to measure. Merged rather than assigned so a buyer's
+        # threshold overrides in the same column survive a re-seed.
+        settings: account.settings.merge("avg_daily_burn" => attributes.fetch("avg_daily_burn"))
       )
       account
     end
