@@ -48,9 +48,16 @@ module Consensus
       weights_for(layer_key).fetch(signal, 0)
     end
 
+    # Coerced on the way out because both sides come from jsonb, where a buyer's
+    # override can hold a string, a float, or a null. A weight that is not a whole
+    # number of points is meaningless to the score, and letting one reach the
+    # scorer would take a verification down with a TypeError rather than costing
+    # the lead nothing — which is what an undefined weight already means.
     def weights_for(layer_key)
       @weights_for ||= {}
-      @weights_for[layer_key] ||= default_weights(layer_key).merge(weight_overrides(layer_key))
+      @weights_for[layer_key] ||= default_weights(layer_key)
+                                  .merge(weight_overrides(layer_key))
+                                  .transform_values { |delta| Integer(delta, exception: false) || 0 }
     end
 
     def hard_stop?(layer_key, verdict)

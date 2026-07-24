@@ -37,16 +37,22 @@ module Certificates
     def create_certificate
       previous = account.consent_certificates.chain_order.last
 
+      # By foreign key, not by association object, and this matters. Assigning
+      # `verification_run: @run` attaches the new certificate to that run's has_one
+      # — so when the insert loses the unique index to a certificate that already
+      # exists, the *failed* record stays hanging off the caller's run and the next
+      # `run.save` autosaves it, raising the same violation somewhere else entirely.
+      # A redelivered finalizer could then never close its run.
       account.consent_certificates.create!(
-        lead: lead,
-        verification_run: @run,
+        lead_id: lead.id,
+        verification_run_id: @run.id,
         verdict: @consensus_verdict.verdict,
         evidence: evidence,
         evidence_hash: CanonicalJson.hexdigest(evidence),
         previous_hash: previous&.evidence_hash,
         sequence_number: (previous&.sequence_number || 0) + 1,
         trustedform_reference: trustedform_reference,
-        issued_at: Time.current
+        issued_at: issued_at
       )
     end
 
@@ -67,7 +73,7 @@ module Certificates
         consensus: consensus_evidence,
         policy_snapshot: @consensus_verdict.policy_snapshot,
         trustedform: trustedform_evidence,
-        issued_at: Time.current,
+        issued_at: issued_at,
         engine_version: Consensus::Policy::ENGINE_VERSION
       }
     end
@@ -136,6 +142,13 @@ module Certificates
 
     def trustedform_reference
       lead.raw_payload["trusted_form_cert_url"]
+    end
+
+    # One timestamp, read twice: the column and the hashed evidence have to agree
+    # about when this certificate was issued, or the document says one thing and
+    # the record another.
+    def issued_at
+      @issued_at ||= Time.current
     end
 
     def rows_by_key

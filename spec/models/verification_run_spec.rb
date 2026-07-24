@@ -46,22 +46,26 @@ RSpec.describe VerificationRun do
   # raised — a killed worker's job is simply gone. Looking only at `pending` left
   # every one of those runs unrecoverable.
   describe ".stuck" do
-    def run_with_layer(status:, claim_status:, claimed_at: nil, created_at: 1.hour.ago)
-      run = create(:verification_run, account: account, status: status, created_at: created_at)
+    # `updated_at` matters as much as `created_at`: it is what the dispatcher and
+    # the completion gate stamp, so it is how recently anything touched the run.
+    def run_with_layer(status:, claim_status:, claimed_at: nil, touched_at: 1.hour.ago)
+      run = create(:verification_run, account: account, status: status,
+                                      created_at: touched_at, updated_at: touched_at)
       create(:layer_result, account: account, verification_run: run, layer_key: "anura",
                             status: claim_status, started_at: claimed_at)
       run
     end
 
     it "finds a run that was never dispatched" do
-      never_dispatched = create(:verification_run, account: account, lead: lead,
-                                                   status: "pending", created_at: 1.hour.ago)
+      never_dispatched = create(:verification_run, account: account, lead: lead, status: "pending",
+                                                   created_at: 1.hour.ago, updated_at: 1.hour.ago)
 
       expect(described_class.stuck).to include(never_dispatched)
     end
 
     it "leaves a run that has only just been created alone" do
-      just_created = create(:verification_run, account: account, status: "pending", created_at: 1.second.ago)
+      just_created = create(:verification_run, account: account, status: "pending",
+                                               created_at: 1.second.ago, updated_at: 1.second.ago)
 
       expect(described_class.stuck).not_to include(just_created)
     end
@@ -83,14 +87,30 @@ RSpec.describe VerificationRun do
     it "leaves a run alone while a worker still holds a fresh claim" do
       working = run_with_layer(status: "running", claim_status: "processing", claimed_at: 30.seconds.ago)
 
+
       expect(described_class.stuck).not_to include(working)
     end
 
-    it "leaves runs that have already reached an outcome alone" do
-      finalizing = run_with_layer(status: "finalizing", claim_status: "completed")
-      completed  = run_with_layer(status: "completed",  claim_status: "completed")
+    it "leaves a run that has already reached an outcome alone" do
+      completed = run_with_layer(status: "completed", claim_status: "completed")
 
-      expect(described_class.stuck).not_to include(finalizing, completed)
+      expect(described_class.stuck).not_to include(completed)
+    end
+
+    # `finalizing` is a claim, not an outcome. The gate commits it before
+    # FinalizeRunJob is enqueued, so an unreachable queue in that instant leaves a
+    # run nothing will ever pick up — and finalization takes milliseconds.
+    it "finds a run left claimed for finalization by a dispatch that never happened" do
+      stranded = run_with_layer(status: "finalizing", claim_status: "completed")
+
+      expect(described_class.stuck).to include(stranded)
+    end
+
+    it "leaves a run alone while it is actually being finalized" do
+      finalizing = run_with_layer(status: "finalizing", claim_status: "completed",
+                                  touched_at: 2.seconds.ago)
+
+      expect(described_class.stuck).not_to include(finalizing)
     end
   end
 end

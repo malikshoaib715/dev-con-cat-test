@@ -157,19 +157,44 @@ RSpec.describe Consensus::Engine do
 
     it "never penalises a lead for a layer the buyer did not buy" do
       rules = policy(weights: { "voice" => { "reused_actor" => -50 } })
-      decision = decide([ row("voice", status: "not_enabled", verdict: nil) ], rules)
+      rows = [ row("anura", verdict: "good"), row("voice", status: "not_enabled", verdict: nil) ]
+
+      decision = decide(rows, rules)
 
       expect(decision.score).to eq(100)
-      expect(decision.per_layer_deltas).to be_empty
+      expect(decision.per_layer_deltas).to eq("anura" => 0)
       expect(decision.reasons).to eq([ Consensus::ReasonBuilder::CLEAN ])
     end
 
     it "never penalises a lead for a layer that had nothing to judge" do
       rules = policy(weights: { "voice" => { "reused_actor" => -50 } })
-      decision = decide([ row("voice", status: "not_applicable", detail: "no voice sample") ], rules)
+      rows = [ row("anura", verdict: "good"), row("voice", status: "not_applicable", detail: "no sample") ]
+
+      decision = decide(rows, rules)
 
       expect(decision.score).to eq(100)
       expect(decision.reasons).to eq([ Consensus::ReasonBuilder::CLEAN ])
+    end
+
+    # Failing open means one flaky vendor cannot bury a good lead. It does not
+    # mean a certificate that attests to nothing: a perfect score reached without
+    # a single check running is indistinguishable from one where nothing ran.
+    it "refuses to accept a lead no layer actually checked" do
+      rules = policy(required: %w[dnc])
+      rows = [ row("anura", status: "errored"), row("voice", status: "not_applicable"),
+               row("enrichment", status: "not_enabled") ]
+
+      decision = decide(rows, rules)
+
+      expect(decision.score).to eq(100)
+      expect(decision.verdict).to eq("review")
+      expect(decision.reasons.first).to eq(Consensus::ReasonBuilder::NOTHING_ANSWERED)
+    end
+
+    it "still rejects a lead nothing checked if something stopped it" do
+      rows = [ row("dnc", verdict: "dnc_listed"), row("anura", status: "errored") ]
+
+      expect(decide(rows, policy).verdict).to eq("reject")
     end
 
     it "reports each layer's contribution so the lead page can show it" do

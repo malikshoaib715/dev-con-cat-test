@@ -33,6 +33,34 @@ RSpec.describe Consensus::Policy do
       expect(policy.weight_for("anura", "suspect_anonymizer")).to eq(-35)
     end
 
+    # Both sides of the merge come out of jsonb, where a buyer's override can hold
+    # a string, a float or a null. A weight that reached the scorer as one of those
+    # would take a verification down with a TypeError.
+    it "coerces an override the buyer typed as a string" do
+      as_tenant(account) do
+        create(:layer_policy, account: account, layer_key: "anura", weight_overrides: { "suspect" => "-40" })
+      end
+
+      expect(policy_for(account).weight_for("anura", "suspect")).to eq(-40)
+    end
+
+    it "treats a null override as no weight at all" do
+      as_tenant(account) do
+        create(:layer_policy, account: account, layer_key: "anura", weight_overrides: { "suspect" => nil })
+      end
+
+      expect(policy_for(account).weight_for("anura", "suspect")).to eq(0)
+    end
+
+    it "treats an override that is not a number at all as no weight" do
+      as_tenant(account) do
+        create(:layer_policy, account: account, layer_key: "anura",
+                              weight_overrides: { "suspect" => { "nested" => true } })
+      end
+
+      expect(policy_for(account).weight_for("anura", "suspect")).to eq(0)
+    end
+
     it "scores an unweighted signal at zero rather than raising" do
       expect(policy_for(account).weight_for("anura", "a_signal_nobody_defined")).to eq(0)
     end
@@ -84,6 +112,18 @@ RSpec.describe Consensus::Policy do
 
       it "does not touch any other layer" do
         expect(policy_for(account)).not_to be_hard_stop("anura", "suspect_anonymizer")
+      end
+
+      # Promotion refuses what a layer penalises. A signal weighted at zero costs
+      # the lead nothing by design, so promoting the layer must not turn it into a
+      # rejection.
+      it "leaves a deliberately unweighted signal alone" do
+        as_tenant(account) do
+          create(:layer_policy, account: account, layer_key: "dnc", treat_as_hard_stop: true)
+        end
+
+        expect(policy_for(account)).not_to be_hard_stop("dnc", "window_closed")
+        expect(policy_for(account)).to be_hard_stop("dnc", "dnc_listed")
       end
     end
   end

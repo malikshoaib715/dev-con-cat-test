@@ -164,6 +164,49 @@ RSpec.describe Verification::Finalizer do
     end
   end
 
+  describe "a delivery that resumes a half-finished finalization" do
+    # The crash this survives: the certificate was issued and the bill settled, but
+    # the process died before the run was closed. The redelivery has to finish the
+    # job on the very objects that already did half of it — which is why the issuer
+    # creates by foreign key. Attaching a certificate that then loses the unique
+    # index leaves the failed record hanging off this run, and the close below
+    # autosaves it: the run could never reach `completed` and the job would retry
+    # forever.
+    it "closes a run whose certificate and settlement already exist" do
+      run = claimed_run
+      finalize(run)
+      as_tenant(run.account) { run.update!(status: "finalizing", completed_at: nil) }
+
+      expect(finalize(run)).to be_success
+      expect(run.reload.status).to eq("completed")
+      as_tenant(run.account) do
+        expect(ConsentCertificate.where(verification_run_id: run.id).count).to eq(1)
+        expect(run.credit_ledger_entries.entry_type_settlement_refund.count).to eq(1)
+      end
+    end
+  end
+
+  # The completion gate is supposed to make this impossible, so this is the proof
+  # that the defence behind it holds too: unique indexes on the verdict, the
+  # certificate and the ledger entry type, and a savepoint around the verdict
+  # insert so losing the race does not abort the whole finalization.
+  describe "two finalizers racing the same run", :real_transactions do
+    it "issues one verdict, one certificate and one refund" do
+      load_static_seeds
+      run = claimed_run
+
+      results = in_parallel(2, tenant: run.account) { described_class.call(run: run) }
+
+      expect(results.map(&:success?)).to eq([ true, true ])
+      as_tenant(run.account) do
+        expect(ConsensusVerdict.where(verification_run_id: run.id).count).to eq(1)
+        expect(ConsentCertificate.where(verification_run_id: run.id).count).to eq(1)
+        expect(run.credit_ledger_entries.entry_type_settlement_refund.count).to eq(1)
+      end
+      expect(run.reload.status).to eq("completed")
+    end
+  end
+
   describe "guards" do
     it "refuses a run nobody claimed, since the gate is the only door in" do
       run = claimed_run

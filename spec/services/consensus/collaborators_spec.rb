@@ -74,7 +74,7 @@ RSpec.describe "the consensus collaborators" do
       unavailable = [ Consensus::Engine::Unavailable.new(layer_key: "enrichment", required: false) ]
 
       reasons = described_class.call(stop: stop, penalties: [ penalty("anura", -15) ],
-                                     unavailable: unavailable)
+                                     unavailable: unavailable, answered: true)
 
       expect(reasons.first).to eq("hard stop — DNC / Callback: listed")
       expect(reasons.last).to include("enrichment")
@@ -82,14 +82,21 @@ RSpec.describe "the consensus collaborators" do
     end
 
     it "signs a positive adjustment so a buyer's reweighting reads correctly" do
-      reasons = described_class.call(stop: nil, penalties: [ penalty("anura", 5) ], unavailable: [])
+      reasons = described_class.call(stop: nil, penalties: [ penalty("anura", 5) ], unavailable: [],
+                                     answered: true)
 
       expect(reasons).to eq([ "Anura: vendor said so (+5)" ])
     end
 
+    it "never reads as a clean pass when no layer answered at all" do
+      reasons = described_class.call(stop: nil, penalties: [], unavailable: [], answered: false)
+
+      expect(reasons).to eq([ described_class::NOTHING_ANSWERED ])
+    end
+
     it "does not claim every layer passed when one of them could not answer" do
       unavailable = [ Consensus::Engine::Unavailable.new(layer_key: "dnc", required: true) ]
-      reasons = described_class.call(stop: nil, penalties: [], unavailable: unavailable)
+      reasons = described_class.call(stop: nil, penalties: [], unavailable: unavailable, answered: true)
 
       expect(reasons).to eq([ "required layer unavailable: dnc — verdict capped at review" ])
     end

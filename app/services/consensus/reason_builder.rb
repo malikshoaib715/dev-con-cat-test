@@ -8,15 +8,17 @@ module Consensus
   # line is the one anybody reads. A layer that cost nothing says nothing.
   class ReasonBuilder
     CLEAN = "all enabled layers passed"
+    NOTHING_ANSWERED = "no layer returned a verdict — verdict capped at review"
 
-    def self.call(stop:, penalties:, unavailable:)
-      new(stop: stop, penalties: penalties, unavailable: unavailable).call
+    def self.call(stop:, penalties:, unavailable:, answered:)
+      new(stop: stop, penalties: penalties, unavailable: unavailable, answered: answered).call
     end
 
-    def initialize(stop:, penalties:, unavailable:)
+    def initialize(stop:, penalties:, unavailable:, answered:)
       @stop = stop
       @penalties = penalties
       @unavailable = unavailable
+      @answered = answered
     end
 
     def call
@@ -27,6 +29,9 @@ module Consensus
 
     def leading_reasons
       return [ hard_stop_reason ] if @stop
+      # "Everything passed" and "nothing ran" both produce an empty penalty list
+      # and must never read the same way.
+      return [ NOTHING_ANSWERED ] unless @answered
       return [ CLEAN ] if @penalties.empty? && @unavailable.empty?
 
       ranked_penalties.map { |penalty| penalty_reason(penalty) }

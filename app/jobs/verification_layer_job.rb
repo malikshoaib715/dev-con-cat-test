@@ -153,9 +153,25 @@ class VerificationLayerJob < ApplicationJob
 
   # Whichever layer finishes last claims the run for finalization, and only one of
   # them can — so exactly one FinalizeRunJob is ever dispatched per run.
+  #
+  # The claim is already committed by the time the enqueue is attempted, so an
+  # unreachable queue here would otherwise strand the run in `finalizing` with
+  # nothing left to retry: this job's own retry finds the layer row terminal,
+  # declines the claim, and succeeds. Recorded instead, which is what
+  # VerificationRun.stuck and the requeue task look for. The layer's own work is
+  # finished and is not undone by it.
   def check_for_completion(run)
     result = Verification::CompletionGate.call(run: run)
-    FinalizeRunJob.perform_later(run.id) if result.success?
+    return unless result.success?
+
+    FinalizeRunJob.perform_later(run.id)
+  rescue *ApplicationJob::ENQUEUE_FAILURES => error
+    Audit::Recorder.record!(
+      Audit::Events::SYSTEM_ENQUEUE_FAILED,
+      subject: run.lead,
+      payload: { run_id: run.id, job: "FinalizeRunJob", error_class: error.class.name,
+                 error_message: error.message }
+    )
   end
 
   def layer_payload(row)

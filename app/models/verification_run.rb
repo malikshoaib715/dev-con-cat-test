@@ -26,10 +26,20 @@ class VerificationRun < ApplicationRecord
   # pick up — Sidekiq only redelivers jobs that raised, so neither recovers on its
   # own. What separates them is whether any claim is still fresh, so that is what
   # is asked. `pending` is included for the run that was never dispatched at all.
+  #
+  # `finalizing` is included too, and is not an outcome: it is a claim that
+  # somebody is finalizing this run. The claim commits before FinalizeRunJob is
+  # enqueued, so a queue that is unreachable in that instant leaves a run nothing
+  # will ever pick up — and finalization takes milliseconds, so one still in that
+  # state minutes later is abandoned. `updated_at` is what the gate stamps when it
+  # claims, which is why staleness is asked of it as well as of creation.
   scope :stuck, -> {
-    where(status: %w[pending running])
-      .where(created_at: ..LayerResult::STALE_CLAIM_AFTER.ago)
-      .where.not(id: LayerResult.claimed_since(LayerResult::STALE_CLAIM_AFTER.ago).select(:verification_run_id))
+    stale_before = LayerResult::STALE_CLAIM_AFTER.ago
+
+    where(status: %w[pending running finalizing])
+      .where(created_at: ..stale_before)
+      .where(updated_at: ..stale_before)
+      .where.not(id: LayerResult.claimed_since(stale_before).select(:verification_run_id))
   }
 
   def outstanding_layer_results

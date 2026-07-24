@@ -9,11 +9,6 @@ module Verification
   # lives in Redis, which is not our database: a job enqueued inside the
   # transaction can be picked up by a worker before the rows it needs exist.
   class Dispatcher < ApplicationService
-    # Redis being unreachable must never cost us a lead. Both client libraries are
-    # present — Sidekiq talks through redis-client, while the redis gem backs
-    # Action Cable — so both hierarchies are caught.
-    ENQUEUE_FAILURES = [ RedisClient::ConnectionError, Redis::BaseError, Errno::ECONNREFUSED ].freeze
-
     def initialize(run:)
       @run = run
     end
@@ -25,7 +20,8 @@ module Verification
       mark_running
 
       success(jobs.size)
-    rescue *ENQUEUE_FAILURES => error
+    # Redis being unreachable must never cost us a lead.
+    rescue *ApplicationJob::ENQUEUE_FAILURES => error
       undispatched(error)
     end
 

@@ -121,7 +121,11 @@ module Seeds
 
       ActsAsTenant.with_tenant(account) do
         lead = Lead.find_by!(public_id: attributes.fetch("lead_id"))
-        verdict = lead.verification_run.consensus_verdict
+        verdict = lead.verification_run&.consensus_verdict
+        # A seed interrupted mid-pipeline leaves a lead whose run never finished,
+        # and the next run skips it as already present. Said plainly rather than
+        # crashing on a nil three lines later.
+        raise "#{lead.public_id} has no verdict — re-run bin/rails db:reset db:seed" if verdict.nil?
 
         Row.new(lead_ref: lead.public_id, derived: lead.verdict, score: verdict.score,
                 via: via(verdict), flags: lead.flags, hint: attributes.fetch("expected_verdict"))

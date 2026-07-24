@@ -69,14 +69,25 @@ module Consensus
 
     # A compliance layer that could not answer is not evidence of a good lead. The
     # lead is not destroyed for it either — it goes to a human.
+    #
+    # Nothing answering at all is capped for the same reason and a stronger one:
+    # a score of 100 there means "no check found anything", which is indis-
+    # tinguishable from "no check ran". Failing open is one flaky vendor not
+    # burying a good lead; it is not a certificate that attests to nothing.
     def capped(banded_verdict)
-      return "review" if banded_verdict == "accept" && required_unavailable?
+      return banded_verdict unless banded_verdict == "accept"
+      return "review" if required_unavailable? || nothing_answered?
 
       banded_verdict
     end
 
+    def nothing_answered?
+      scoring.contributions.empty?
+    end
+
     def reasons
-      ReasonBuilder.call(stop: stop, penalties: scoring.penalties, unavailable: unavailable)
+      ReasonBuilder.call(stop: stop, penalties: scoring.penalties, unavailable: unavailable,
+                         answered: !nothing_answered?)
     end
 
     def flags

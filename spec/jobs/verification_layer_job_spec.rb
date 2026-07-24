@@ -148,6 +148,36 @@ RSpec.describe VerificationLayerJob do
       described_class.perform_now(run.id, "dnc")
 
       expect(run.reload.status).to eq("finalizing")
+      expect(enqueued_jobs.select { |job| job[:job] == FinalizeRunJob }.size).to eq(1)
+    end
+
+    # The claim is already committed when the enqueue is attempted, and this job's
+    # own retry cannot rescue the situation: it would find the layer row terminal,
+    # decline the claim and succeed. Without this the run is stranded in
+    # `finalizing` with nothing left to drive it.
+    context "when the queue is unreachable at the moment of hand-off" do
+      let(:run) { build_run(%w[anura]) }
+
+      before do
+        allow(FinalizeRunJob).to receive(:perform_later)
+          .and_raise(RedisClient::ConnectionError, "connection refused")
+      end
+
+      it "keeps the layer's own work and records the failed hand-off" do
+        described_class.perform_now(run.id, "anura")
+
+        expect(layer_result(run, "anura").status).to eq("completed")
+        expect(events_of_type(Audit::Events::SYSTEM_ENQUEUE_FAILED).sole.payload)
+          .to include("job" => "FinalizeRunJob", "run_id" => run.id)
+      end
+
+      it "leaves the run recoverable rather than lost" do
+        described_class.perform_now(run.id, "anura")
+        run.update_columns(created_at: 1.hour.ago, updated_at: 1.hour.ago)
+
+        expect(run.reload.status).to eq("finalizing")
+        expect(as_tenant(run.account) { VerificationRun.stuck.to_a }).to include(run)
+      end
     end
   end
 
