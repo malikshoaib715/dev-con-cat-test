@@ -152,10 +152,10 @@ class VerificationLayerJob < ApplicationJob
   end
 
   # Whichever layer finishes last claims the run for finalization, and only one of
-  # them can. Chunk 3.3 dispatches FinalizeRunJob from this result, once there is a
-  # consensus engine for it to run.
+  # them can — so exactly one FinalizeRunJob is ever dispatched per run.
   def check_for_completion(run)
-    Verification::CompletionGate.call(run: run)
+    result = Verification::CompletionGate.call(run: run)
+    FinalizeRunJob.perform_later(run.id) if result.success?
   end
 
   def layer_payload(row)

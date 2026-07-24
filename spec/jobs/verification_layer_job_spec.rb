@@ -185,7 +185,9 @@ RSpec.describe VerificationLayerJob do
       expect(row.status).to eq("errored")
       expect(row.error_class).to eq("Errors::ProviderUnavailable")
       expect(row.error_message).to eq("vendor down")
-      expect(run.reload.status).to eq("finalizing")
+      # All the way through, not merely unstuck: the exhausted layer is terminal,
+      # so the completion gate opens and the run finalizes on what it does have.
+      expect(run.reload.status).to eq("completed")
     end
 
     # Never presented as a pass: the certificate has to be able to tell an
