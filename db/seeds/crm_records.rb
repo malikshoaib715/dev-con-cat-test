@@ -27,9 +27,9 @@ module Seeds
         # Normalized through the same functions ingestion uses, or a duplicate
         # would only be caught when the visitor happened to type their number the
         # same way the CRM export did.
-        email_normalized: Leads::Normalizer.email(email),
+        email_normalized: ::Leads::Normalizer.email(email),
         phone: phone,
-        phone_normalized: Leads::Normalizer.phone(phone),
+        phone_normalized: ::Leads::Normalizer.phone(phone),
         source_created_at: attributes.fetch("created_at")
       )
     end

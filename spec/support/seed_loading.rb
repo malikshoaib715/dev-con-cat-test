@@ -6,6 +6,8 @@ require Rails.root.join("db/seeds/layer_policies")
 require Rails.root.join("db/seeds/pixels")
 require Rails.root.join("db/seeds/provider_responses")
 require Rails.root.join("db/seeds/crm_records")
+require Rails.root.join("db/seeds/leads")
+require Rails.root.join("db/seeds/balance_reconciliation")
 
 # Several specs need the real fixture accounts rather than factory ones, because
 # the arithmetic under test (cost per run, credit balances, which layers an
@@ -29,6 +31,21 @@ module SeedLoading
 
   def load_layer_definitions
     without_stdout { Seeds::LayerDefinitions.load! }
+  end
+
+  # The whole seeded world, twelve leads driven through the real pipeline. Slow by
+  # nature and used only by the harness.
+  def load_all_seeds
+    without_stdout do
+      Seeds::LayerDefinitions.load!
+      Seeds::Accounts.load!
+      Seeds::LayerPolicies.load!
+      Seeds::Pixels.load!
+      Seeds::ProviderResponses.load!
+      Seeds::CrmRecords.load!
+      Seeds::Leads.load!
+      Seeds::BalanceReconciliation.load!
+    end
   end
 
   def load_crm_records
@@ -95,4 +112,18 @@ end
 
 RSpec.configure do |config|
   config.include SeedLoading
+
+  # Driving twelve leads through the whole pipeline costs a couple of seconds, and
+  # every example in the harness reads the same finished world. Seeded once per
+  # file, outside the per-example transaction so the examples can share it, and
+  # truncated afterwards so nothing leaks into the next spec file.
+  config.before(:context, :seeded_world) do
+    self.class.use_transactional_tests = false
+    load_all_seeds
+  end
+
+  config.after(:context, :seeded_world) do
+    connection = ActiveRecord::Base.connection
+    connection.truncate_tables(*(connection.tables - %w[schema_migrations ar_internal_metadata]))
+  end
 end

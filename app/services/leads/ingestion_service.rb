@@ -87,6 +87,10 @@ module Leads
 
       @pixel.leads.create!(
         account: @pixel.account,
+        # Seeds and specs only, and never reachable from the pixel endpoint: the
+        # twelve fixture leads have to keep their own ids or the gateway cannot
+        # look their recorded vendor answers up. Left to HasPublicId otherwise.
+        public_id: @attributes[:public_id],
         session_id: @attributes.fetch(:session_id),
         **fields.slice(*IDENTITY_FIELDS),
         # `presence` so a field the visitor left as whitespace is stored as

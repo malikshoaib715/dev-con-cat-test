@@ -40,8 +40,8 @@ module Seeds
         [
           lead.fetch("lead_id"),
           {
-            email_normalized: Leads::Normalizer.email(lead["email"]),
-            phone_normalized: Leads::Normalizer.phone(lead["phone"])
+            email_normalized: ::Leads::Normalizer.email(lead["email"]),
+            phone_normalized: ::Leads::Normalizer.phone(lead["phone"])
           }
         ]
       end
