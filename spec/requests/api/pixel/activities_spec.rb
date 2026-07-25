@@ -98,6 +98,18 @@ RSpec.describe "GET /api/pixel/leads/:id/activity" do
       expect(body["cursor"]).to eq(body["events"].last["id"])
     end
 
+    # Otherwise a run whose most recent events are all unrenderable would be
+    # re-read in full on every poll, forever.
+    it "advances the cursor past events it did not render" do
+      layer_completed("dnc")
+      record(Audit::Events::LAYER_STARTED, layer_key: "anura")
+
+      body = poll
+
+      expect(body["events"].length).to eq(1)
+      expect(body["cursor"]).to be > body["events"].last["id"]
+    end
+
     it "returns only what is newer than the client's cursor" do
       layer_completed("dnc")
       first_cursor = poll["cursor"]

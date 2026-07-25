@@ -34,6 +34,10 @@ module Api
         @lead ||= ActsAsTenant.without_tenant { Lead.find_by!(public_id: params[:id]) }
       end
 
+      # The cursor advances past every event examined, not just the ones that
+      # rendered — most of the spine is not a panel frame, and a cursor that only
+      # moved for frames would re-read the same lifecycle events on every poll and
+      # never get past a run whose latest events are all unrenderable.
       def activity
         frames = events.filter_map { |event| Realtime::PanelFrame.for(event)&.merge(id: event.id) }
         cursor = events.last&.id || since
