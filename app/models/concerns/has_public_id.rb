@@ -21,6 +21,12 @@ module HasPublicId
     end
   end
 
+  # URLs address these records by the identifier their owner reads off a snippet,
+  # an invoice or a certificate — never by a sequential row id.
+  def to_param
+    public_id
+  end
+
   private
 
   def assign_public_id

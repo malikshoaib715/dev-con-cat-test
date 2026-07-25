@@ -11,4 +11,8 @@ class Visit < ApplicationRecord
   validates :started_at, presence: true
 
   scope :recent_first, -> { order(started_at: :desc) }
+  # The browsing that preceded a submission, matched on the correlation id the
+  # page carries from beacon to form post. Its IP is what the lead's own is
+  # compared against.
+  scope :for_lead, ->(lead) { where(pixel_id: lead.pixel_id, session_id: lead.session_id) }
 end

@@ -3,7 +3,8 @@
     current_user, nothing the broadcast would not have. %>
 <tr id="<%= dom_id(lead) %>" class="hover:bg-slate-50">
   <td class="px-4 py-3">
-    <div class="font-medium"><%= lead.full_name || "Unnamed lead" %></div>
+    <%= link_to lead.full_name || "Unnamed lead", app_lead_path(lead),
+                class: "font-medium text-slate-900 hover:underline" %>
     <div class="font-mono text-xs text-slate-500"><%= lead.public_id %></div>
   </td>
   <td class="px-4 py-3 text-slate-600">

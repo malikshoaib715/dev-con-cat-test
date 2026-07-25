@@ -18,6 +18,18 @@ class AuditEvent < ApplicationRecord
   scope :of_type,       ->(event_type) { where(event_type: event_type) }
   scope :for_session,   ->(session_id) { where(session_id: session_id) }
   scope :for_subject,   ->(subject) { where(subject_type: subject.class.name, subject_id: subject.id) }
+  # A lead's whole story, which starts before the lead exists: the events written
+  # against the record itself, plus everything sharing the browser session that
+  # produced it — the visit beacon, and the submission that was refused or
+  # replayed. Both sides carry the account, so the (account_id, occurred_at)
+  # composite indexes serve the query rather than being stepped around.
+  scope :for_lead_timeline, ->(lead) {
+    within_account = where(account_id: lead.account_id)
+
+    within_account.where(subject_type: "Lead", subject_id: lead.id)
+                  .or(within_account.where(session_id: lead.session_id))
+  }
+  scope :for_actor_type,  ->(actor_type) { where(actor_type: actor_type) }
   scope :occurred_from, ->(time) { where(occurred_at: time..) }
   scope :occurred_to,   ->(time) { where(occurred_at: ..time) }
   # The polling fallback's cursor. Ordered and sliced by id rather than by time,

@@ -125,6 +125,189 @@ RSpec.describe "App::Leads", type: :request do
     end
   end
 
+  describe "the lead detail page" do
+    before { sign_in create(:user, account: solar, role: "member") }
+
+    it "is addressed by the id the buyer's own records use" do
+      get app_lead_path(solar_lead)
+
+      expect(response).to have_http_status(:ok)
+      expect(request.path).to end_with(solar_lead.public_id)
+    end
+
+    it "reports another account's lead as missing rather than as forbidden" do
+      get app_lead_path(medicare_lead)
+
+      expect(response).to have_http_status(:not_found)
+    end
+
+    it "finds nothing when a row id is probed in place of a public one" do
+      get app_lead_path(solar_lead.id)
+
+      expect(response).to have_http_status(:not_found)
+    end
+
+    context "with a finished verification" do
+      let(:lead) { as_tenant(solar) { create(:lead, account: solar, status: "completed", verdict: "reject") } }
+
+      let!(:run) do
+        as_tenant(solar) do
+          Verification::RunCreator.call(lead: lead, effective_layer_keys: %w[anura duplicate_detection]).value
+        end
+      end
+
+      let!(:verdict) do
+        as_tenant(solar) do
+          create(:consensus_verdict, account: solar, verification_run: run, verdict: "reject", score: 0,
+                                     reasons: [ "duplicate of an existing customer" ],
+                                     hard_stop_layer: "duplicate_detection",
+                                     policy_snapshot: { "thresholds" => { "accept" => 70 } })
+        end
+      end
+
+      let!(:certificate) do
+        as_tenant(solar) { create(:consent_certificate, account: solar, verification_run: run, lead: lead) }
+      end
+
+      before do
+        as_tenant(solar) do
+          run.layer_results.find_by(layer_key: "anura")
+             .update!(status: "completed", panel_verdict: "pass", verdict: "good",
+                      detail: "no fraud signals", score_delta: 0,
+                      started_at: 2.seconds.ago, completed_at: 1.second.ago)
+          create(:visit, account: solar, pixel: lead.pixel, session_id: lead.session_id,
+                         ip_address: "76.14.201.33")
+          Audit::Recorder.record!(Audit::Events::LEAD_RECEIVED, subject: lead, account: solar,
+                                  payload: { page_url: lead.page_url })
+        end
+      end
+
+      it "names the layers this account never bought rather than leaving them blank" do
+        get app_lead_path(lead)
+
+        expect(response.body).to include("Not in plan")
+        expect(response.body).to include("Voice AI")
+      end
+
+      it "shows every layer in the registry, whatever state it ended in" do
+        get app_lead_path(lead)
+
+        Layers::Registry.entries.each { |entry| expect(response.body).to include(entry.label) }
+      end
+
+      it "shows the decision, its reasons and the layer that hard-stopped it" do
+        get app_lead_path(lead)
+
+        expect(response.body).to include("duplicate of an existing customer")
+        expect(response.body).to include("Hard stop")
+      end
+
+      it "keeps the policy the verdict was reached under on the page" do
+        get app_lead_path(lead)
+
+        expect(response.body).to include("Policy snapshot", "accept")
+      end
+
+      it "links the certificate to the page anybody can check it on" do
+        get app_lead_path(lead)
+
+        expect(response.body).to include(certificate.public_id)
+        expect(response.body).to include(verify_certificate_path(certificate.public_id))
+      end
+
+      it "tells the story from the visit onwards, not just from the verdict" do
+        get app_lead_path(lead)
+
+        expect(response.body).to include(Audit::Events::LEAD_RECEIVED)
+        expect(response.body).to include("76.14.201.33")
+      end
+    end
+  end
+
+  describe "re-verifying" do
+    let(:pixel) { as_tenant(solar) { create(:pixel, account: solar, enabled_layers: [ "anura" ]) } }
+
+    let(:held) do
+      as_tenant(solar) do
+        create(:lead, account: solar, pixel: pixel, status: "on_hold_insufficient_credits")
+      end
+    end
+
+    before do
+      as_tenant(solar) { create(:layer_policy, account: solar, layer_key: "anura", enabled: true) }
+      create(:layer_definition, key: "anura", cost_credits: 3)
+    end
+
+    it "restarts a held verification once an admin has topped the account up" do
+      solar.update!(credit_balance: 10)
+      sign_in create(:user, account: solar, role: "account_admin")
+
+      post reverify_app_lead_path(held)
+
+      expect(response).to redirect_to(app_lead_path(held))
+      expect(flash[:notice]).to eq("Verification restarted.")
+      expect(held.reload.status).to eq("verifying")
+    end
+
+    it "says so, and keeps the lead held, when the balance is still short" do
+      solar.update!(credit_balance: 0)
+      sign_in create(:user, account: solar, role: "account_admin")
+
+      post reverify_app_lead_path(held)
+
+      expect(flash[:alert]).to match(/Insufficient credits/)
+      expect(held.reload.status).to eq("on_hold_insufficient_credits")
+    end
+
+    it "refuses a lead that is not waiting on anybody" do
+      lead = as_tenant(solar) { create(:lead, account: solar, status: "completed", verdict: "accept") }
+      sign_in create(:user, account: solar, role: "account_admin")
+
+      post reverify_app_lead_path(lead)
+
+      expect(flash[:alert]).to match(/not waiting to be verified/)
+    end
+
+    # Spending an account's credits is an administrative act, so the read-only
+    # role cannot do it — and cannot see the button either.
+    it "refuses a member, who is read-only" do
+      solar.update!(credit_balance: 10)
+      sign_in create(:user, account: solar, role: "member")
+
+      post reverify_app_lead_path(held)
+
+      expect(response).to have_http_status(:forbidden)
+      expect(held.reload.status).to eq("on_hold_insufficient_credits")
+    end
+
+    it "offers a member no button to press" do
+      solar.update!(credit_balance: 10)
+      sign_in create(:user, account: solar, role: "member")
+
+      get app_lead_path(held)
+
+      expect(response.body).not_to include(reverify_app_lead_path(held))
+    end
+
+    it "offers an admin the button on a held lead" do
+      solar.update!(credit_balance: 10)
+      sign_in create(:user, account: solar, role: "account_admin")
+
+      get app_lead_path(held)
+
+      expect(response.body).to include(reverify_app_lead_path(held))
+    end
+
+    it "reports another account's lead as missing rather than re-verifying it" do
+      sign_in create(:user, account: medicare, role: "account_admin")
+
+      post reverify_app_lead_path(held)
+
+      expect(response).to have_http_status(:not_found)
+      expect(held.reload.status).to eq("on_hold_insufficient_credits")
+    end
+  end
+
   describe "searching" do
     let!(:searchable) do
       as_tenant(solar) do

@@ -42,7 +42,12 @@ Rails.application.routes.draw do
   end
 
   namespace :app do
-    resources :leads, only: %i[index]
+    # `:id` is the L-… public id, so a CRM URL reads the way the buyer's own
+    # records do — and a row id guessed by hand finds nothing.
+    resources :leads, only: %i[index show] do
+      # After a top-up, or after a fan-out that never reached the queue.
+      post :reverify, on: :member
+    end
     # Looked up by public_id, never by row id: the px_… identifier is the one the
     # buyer sees in their own snippet.
     resources :pixels

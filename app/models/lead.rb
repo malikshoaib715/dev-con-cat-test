@@ -59,6 +59,20 @@ class Lead < ApplicationRecord
     [ first_name, last_name ].compact_blank.join(" ").presence
   end
 
+  # Waiting on somebody to try again: either the verification was never funded, or
+  # its run reached the database and never reached the queue. What to *do* about
+  # each case is Leads::Reverification's business; this is only whether there is
+  # anything to do, and both the button and the service read it from here.
+  def reverifiable?
+    on_hold_insufficient_credits? || stuck_run.present?
+  end
+
+  def stuck_run
+    return nil if verification_run.nil?
+
+    VerificationRun.stuck.find_by(id: verification_run.id)
+  end
+
   private
 
   # An unverifiable lead is worthless to a buyer: they need something to dial or

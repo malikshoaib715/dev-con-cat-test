@@ -6,11 +6,47 @@ module App
   class LeadsController < BaseController
     include Pagy::Backend
 
+    before_action :set_lead, only: %i[show reverify]
+
     def index
       @pagy, @leads = pagy(filtered_leads)
     end
 
+    def show
+      @run = @lead.verification_run
+      @layer_results = ordered_layer_results
+      @certificate = @lead.consent_certificate
+      @visit = current_account.visits.for_lead(@lead).first
+      @timeline = AuditEvent.for_lead_timeline(@lead).chronological.to_a
+    end
+
+    def reverify
+      authorize @lead, :reverify?
+      result = Leads::Reverification.call(lead: @lead)
+
+      redirect_to app_lead_path(@lead), **flash_for(result)
+    end
+
     private
+
+    def set_lead
+      @lead = current_account.leads.find_by!(public_id: params[:id])
+      authorize @lead
+    end
+
+    # In registry order rather than alphabetically, so the table reads in the order
+    # the panel showed the checks happening.
+    def ordered_layer_results
+      return [] if @run.nil?
+
+      @run.layer_results.sort_by { |result| Layers::Registry.fetch(result.layer_key).position }
+    end
+
+    def flash_for(result)
+      return { notice: "Verification restarted." } if result.success?
+
+      { alert: result.error.to_sentence }
+    end
 
     # Named scopes compose; the controller only decides which of them apply. An
     # unrecognised filter value is dropped rather than raising: a hand-edited URL

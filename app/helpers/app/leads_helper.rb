@@ -16,6 +16,19 @@ module App
       ]
     end
 
+    # A layer that moved the score says by how much; one that agreed with the
+    # starting hundred has nothing to report.
+    def layer_score_delta(layer_result)
+      delta = layer_result.score_delta.to_i
+      delta.zero? ? "—" : delta
+    end
+
+    def layer_duration(layer_result)
+      return "—" if layer_result.started_at.nil? || layer_result.completed_at.nil?
+
+      "#{((layer_result.completed_at - layer_result.started_at) * 1000).round} ms"
+    end
+
     def flag_chips(flags)
       safe_join(Array(flags).map { |flag| flag_chip(flag) }, " ")
     end
