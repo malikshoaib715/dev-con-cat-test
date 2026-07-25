@@ -27,6 +27,10 @@ module Consensus
     SOFT_DUPLICATE_FLAG       = "soft_duplicate"
     REQUIRED_UNAVAILABLE_FLAG = "required_layer_unavailable"
 
+    # The whole flag vocabulary, so the CRM's filter offers exactly what the
+    # engine can produce rather than a hand-kept list beside it.
+    FLAGS = [ DUPLICATE_FLAG, SOFT_DUPLICATE_FLAG, REQUIRED_UNAVAILABLE_FLAG ].freeze
+
     def self.call(run:, policy:)
       new(run: run, policy: policy).call
     end

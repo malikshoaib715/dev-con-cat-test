@@ -39,8 +39,11 @@ module Verification
       ApplicationRecord.transaction do
         verdict = persist_verdict(decision)
         backfill_layer_deltas(decision)
-        record_audits(decision)
+        # Before the audits, deliberately: `verdict.issued` is what tells the CRM
+        # to redraw this lead's row, and a row redrawn from a lead that does not
+        # yet carry its own verdict would show the reader the previous state.
         denormalize_lead(decision)
+        record_audits(decision)
         append_to_crm(decision)
         verdict
       end

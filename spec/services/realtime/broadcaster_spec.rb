@@ -68,6 +68,7 @@ RSpec.describe Realtime::Broadcaster do
       record(Audit::Events::VERDICT_ISSUED, verdict: "accept", score: 90, reasons: [], flags: [])
     }.not_to raise_error
 
-    expect(Rails.logger).to have_received(:error).with(/realtime-drop.*IOError/)
+    # Both consumers ride the same transport, so both report it dead.
+    expect(Rails.logger).to have_received(:error).with(/realtime-drop.*IOError/).at_least(:once)
   end
 end

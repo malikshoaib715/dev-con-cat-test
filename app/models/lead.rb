@@ -17,6 +17,9 @@ class Lead < ApplicationRecord
   has_one  :verification_run,    dependent: :destroy
   has_one  :consent_certificate, dependent: :restrict_with_error
   has_many :layer_results, through: :verification_run
+  # Flattened so a list view can preload the score in one query rather than
+  # walking run → verdict a row at a time.
+  has_one  :consensus_verdict, through: :verification_run
 
   validates :session_id, presence: true, uniqueness: { scope: :pixel_id }
   validates :submitted_at, presence: true
@@ -33,6 +36,24 @@ class Lead < ApplicationRecord
   # difference is what lets the demo cheat sheet list the seeded scenarios
   # without the demo's own submissions piling up underneath them.
   scope :seeded_personas, -> { where("public_id ~ '^L-[0-9]{4}$'") }
+
+  # The CRM search box. A buyer types what they have — a number off a call sheet,
+  # an address, half a name — so the term is normalized the same two ways every
+  # identity in this system is (Leads::Normalizer) and matched exactly against the
+  # indexed columns, with the name as the fallback. "(646) 555-0193" and
+  # "+16465550193" are therefore the same search, which is the whole point of
+  # storing the normalized forms.
+  #
+  # A term with no digits normalizes to no phone, and `= NULL` matches nothing, so
+  # the irrelevant arms cost nothing rather than needing to be branched around.
+  # Bound parameters throughout; the name arm is a scan by nature and is last.
+  scope :search, ->(term) {
+    pattern = "%#{sanitize_sql_like(term.to_s.strip)}%"
+
+    where("leads.phone_normalized = :phone OR leads.email_normalized = :email OR " \
+          "COALESCE(leads.first_name, '') || ' ' || COALESCE(leads.last_name, '') ILIKE :pattern",
+          phone: Leads::Normalizer.phone(term), email: Leads::Normalizer.email(term), pattern: pattern)
+  }
 
   def full_name
     [ first_name, last_name ].compact_blank.join(" ").presence

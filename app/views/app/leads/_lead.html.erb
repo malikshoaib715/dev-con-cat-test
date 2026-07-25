@@ -1,0 +1,23 @@
+<%# Rendered both by the CRM table and by Realtime::Broadcaster when a lead
+    arrives or is decided, so it must render from the lead alone — no session, no
+    current_user, nothing the broadcast would not have. %>
+<tr id="<%= dom_id(lead) %>" class="hover:bg-slate-50">
+  <td class="px-4 py-3">
+    <div class="font-medium"><%= lead.full_name || "Unnamed lead" %></div>
+    <div class="font-mono text-xs text-slate-500"><%= lead.public_id %></div>
+  </td>
+  <td class="px-4 py-3 text-slate-600">
+    <div><%= lead.email.presence || "—" %></div>
+    <div class="text-xs"><%= lead.phone.presence || "—" %></div>
+  </td>
+  <td class="px-4 py-3 font-mono text-xs text-slate-500"><%= lead.pixel.public_id %></td>
+  <td class="px-4 py-3"><%= status_badge(lead.status) %></td>
+  <td class="px-4 py-3">
+    <%= verdict_badge(lead.verdict) %>
+    <div class="mt-1"><%= flag_chips(lead.flags) %></div>
+  </td>
+  <td class="px-4 py-3 text-slate-600">
+    <%= lead.consensus_verdict&.score || "—" %>
+  </td>
+  <td class="px-4 py-3 text-slate-500"><%= lead.submitted_at.strftime("%d %b %Y %H:%M") %></td>
+</tr>
