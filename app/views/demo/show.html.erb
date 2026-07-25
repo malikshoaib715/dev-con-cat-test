@@ -1,0 +1,308 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Solar Savings — Free Quote (Super Pixel demo)</title>
+
+    <!--
+      THE SUPER PIXEL SNIPPET, exactly as a buyer would paste it — the seeded
+      SolarPro pixel, pointed at this app's own ingestion API. Async, because a
+      tag in a buyer's head must never hold up their page.
+    -->
+    <script async src="/super-pixel.js"
+            data-pixel-id="<%= @pixel.public_id %>"
+            data-pixel-key="<%= @pixel.public_key %>"
+            data-endpoint="<%= request.base_url %>/api/pixel"></script>
+
+    <style>
+      :root {
+        --bg: #0b1220;
+        --card: #121b2e;
+        --line: #22304a;
+        --ink: #e8eefc;
+        --muted: #93a4c4;
+        --accent: #3b82f6;
+        --pass: #22c55e;
+        --warn: #f59e0b;
+        --fail: #ef4444;
+        --skip: #64748b;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        background: var(--bg);
+        color: var(--ink);
+      }
+      .wrap {
+        max-width: 1040px;
+        margin: 0 auto;
+        padding: 32px 20px 64px;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 24px;
+      }
+      @media (max-width: 820px) { .wrap { grid-template-columns: 1fr; } }
+      header { grid-column: 1 / -1; }
+      h1 { margin: 0 0 6px; font-size: 26px; }
+      .sub { color: var(--muted); margin: 0; }
+      .card {
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        padding: 22px;
+      }
+      label { display: block; font-size: 13px; color: var(--muted); margin: 14px 0 6px; }
+      input {
+        width: 100%;
+        padding: 11px 12px;
+        border-radius: 9px;
+        border: 1px solid var(--line);
+        background: #0e1728;
+        color: var(--ink);
+        font-size: 15px;
+      }
+      input:focus { outline: 2px solid var(--accent); border-color: var(--accent); }
+      .consent { display: flex; gap: 10px; align-items: flex-start; margin-top: 16px; }
+      .consent input { width: auto; margin-top: 3px; }
+      .consent small { color: var(--muted); }
+      button {
+        margin-top: 18px;
+        width: 100%;
+        padding: 13px;
+        border: 0;
+        border-radius: 10px;
+        background: var(--accent);
+        color: #fff;
+        font-size: 16px;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      button:hover { filter: brightness(1.08); }
+
+      .panel-title { display: flex; justify-content: space-between; align-items: baseline; }
+      .panel-title h2 { font-size: 15px; margin: 0; }
+      .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--skip); margin-right: 8px; }
+      .live { font-size: 12px; color: var(--muted); }
+      .live b { color: var(--pass); }
+      .feed { margin-top: 14px; display: flex; flex-direction: column; gap: 8px; max-height: 460px; overflow: auto; }
+      .row {
+        display: grid;
+        grid-template-columns: 20px 150px 1fr auto;
+        align-items: center;
+        gap: 10px;
+        padding: 9px 10px;
+        border: 1px solid var(--line);
+        border-radius: 9px;
+        background: #0e1728;
+        animation: pop 0.18s ease;
+      }
+      @keyframes pop { from { opacity: 0; transform: translateY(4px); } }
+      .row .layer { font-weight: 600; font-size: 13px; }
+      .row .detail { color: var(--muted); font-size: 12.5px; }
+      .badge { font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 999px; text-transform: uppercase; letter-spacing: .04em; }
+      .b-pass { background: rgba(34,197,94,.15); color: var(--pass); }
+      .b-warn { background: rgba(245,158,11,.15); color: var(--warn); }
+      .b-fail { background: rgba(239,68,68,.15); color: var(--fail); }
+      .b-skip { background: rgba(100,116,139,.18); color: var(--skip); }
+      .b-info { background: rgba(59,130,246,.15); color: var(--accent); }
+      .final {
+        margin-top: 14px; padding: 14px; border-radius: 11px; text-align: center;
+        font-weight: 800; font-size: 18px; letter-spacing: .03em; display: none;
+      }
+      .empty { color: var(--muted); font-size: 13px; padding: 20px; text-align: center; }
+      code { background: #0e1728; padding: 1px 6px; border-radius: 5px; border: 1px solid var(--line); font-size: 12px; }
+
+      .personas { grid-column: 1 / -1; }
+      .persona-table { width: 100%; border-collapse: collapse; margin-top: 14px; font-size: 12.5px; }
+      .persona-table th {
+        text-align: left; color: var(--muted); font-weight: 600; font-size: 11px;
+        text-transform: uppercase; letter-spacing: .04em; padding: 0 10px 8px; border-bottom: 1px solid var(--line);
+      }
+      .persona-table td { padding: 9px 10px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+      .persona-table tr:last-child td { border-bottom: 0; }
+      .personas-note { margin: 14px 0 0; }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <header>
+        <h1>Get your free solar savings quote ☀️</h1>
+        <p class="sub">
+          Demo funnel. The <code>super-pixel.js</code> tag in the head is watching
+          this form. Fill it out and hit submit to see every detection layer report
+          live in the panel on the right.
+        </p>
+      </header>
+
+      <!-- Buyer's lead form. data-pixel-form auto-attaches the pixel. -->
+      <form class="card" data-pixel-form data-pixel-demo>
+        <label for="first_name">First name</label>
+        <input id="first_name" name="first_name" autocomplete="given-name" />
+
+        <label for="last_name">Last name</label>
+        <input id="last_name" name="last_name" autocomplete="family-name" />
+
+        <label for="email">Email</label>
+        <input id="email" name="email" type="email" autocomplete="email" />
+
+        <label for="phone">Phone</label>
+        <input id="phone" name="phone" type="tel" autocomplete="tel" placeholder="+1 555 555 0142" />
+
+        <label class="consent">
+          <input type="checkbox" name="consent" />
+          <small>
+            By checking this box I agree to be contacted by phone/SMS at the number
+            provided, including by automated means. (This is the TCPA consent
+            language your TrustedForm certificate must capture.)
+          </small>
+        </label>
+
+        <button type="submit">Get my quote</button>
+      </form>
+
+      <!-- Real-time Super Pixel activity panel -->
+      <div class="card">
+        <div class="panel-title">
+          <h2><span class="dot" id="dot"></span>Super Pixel — live activity</h2>
+          <span class="live" id="live">idle</span>
+        </div>
+        <div class="feed" id="feed">
+          <div class="empty" id="empty">
+            Waiting for pixel events… interact with the form to see field capture,
+            then submit to run the detection layers.
+          </div>
+        </div>
+        <div class="final" id="final"></div>
+      </div>
+
+      <!-- The twelve seeded personas, with the verdict the real engine derived
+           for each during db:seed. Type one of these identities into the form
+           above and the panel replays that scenario end to end. -->
+      <section class="card personas">
+        <div class="panel-title">
+          <h2>Seeded personas — type one in to replay its scenario</h2>
+          <span class="live"><%= @personas.size %> leads, verdicts derived by the engine</span>
+        </div>
+        <table class="persona-table">
+          <thead>
+            <tr><th>Lead</th><th>Name</th><th>Email</th><th>Phone</th><th>Why</th><th>Verdict</th></tr>
+          </thead>
+          <tbody>
+            <% @personas.each do |persona| %>
+              <tr>
+                <td><code><%= persona.public_id %></code></td>
+                <td><%= persona.first_name %> <%= persona.last_name %></td>
+                <td><%= persona.email %></td>
+                <td><code><%= persona.phone %></code></td>
+                <td class="detail"><%= persona.verification_run&.consensus_verdict&.reasons&.first %></td>
+                <td>
+                  <span class="badge <%= verdict_badge_class(persona.verdict) %>"><%= persona.verdict %></span>
+                </td>
+              </tr>
+            <% end %>
+          </tbody>
+        </table>
+        <p class="detail personas-note">
+          An identity we have never seen gets clean vendor defaults and should
+          ACCEPT. These verdicts were derived through each persona's own account
+          and its enabled layers; replaying one here runs it through this pixel's
+          account instead, so a layer that account does not buy cannot speak.
+        </p>
+      </section>
+    </div>
+
+    <script>
+      // This block is the HOST PAGE consuming the pixel's event stream. In your
+      // build, these same events should be driven by your Rails backend
+      // (via SSE / WebSocket / ActionCable) as real verification jobs finish.
+      var feed = document.getElementById("feed");
+      var empty = document.getElementById("empty");
+      var live = document.getElementById("live");
+      var dot = document.getElementById("dot");
+      var finalEl = document.getElementById("final");
+
+      var LABELS = {
+        vpn_proxy: "VPN / Proxy",
+        anura: "Anura",
+        trustedform: "TrustedForm",
+        blacklist_alliance: "Litigator",
+        dnc: "DNC / Callback",
+        phone_validation: "Phone consensus",
+        email_validation: "Email consensus",
+        enrichment: "Enrichment",
+        duplicate_detection: "Duplicate",
+        voice: "Voice AI",
+        consensus: "Consensus",
+      };
+
+      function badgeClass(v) {
+        return v === "pass" ? "b-pass"
+          : v === "warn" ? "b-warn"
+          : v === "fail" ? "b-fail"
+          : v === "skip" ? "b-skip"
+          : "b-info";
+      }
+
+      function addRow(layerKey, verdict, detail) {
+        if (empty) { empty.remove(); empty = null; }
+        var row = document.createElement("div");
+        row.className = "row";
+        row.innerHTML =
+          '<span class="dot" style="background:var(--' +
+          (verdict === "fail" ? "fail" : verdict === "warn" ? "warn" : verdict === "skip" ? "skip" : "pass") +
+          ')"></span>' +
+          '<span class="layer">' + (LABELS[layerKey] || layerKey) + "</span>" +
+          '<span class="detail">' + (detail || "") + "</span>" +
+          '<span class="badge ' + badgeClass(verdict) + '">' + verdict + "</span>";
+        feed.appendChild(row);
+        feed.scrollTop = feed.scrollHeight;
+      }
+
+      // The snippet is async in production, so this block may well run before
+      // the pixel has defined its global. Bind now if it is here, otherwise wait
+      // for the ready event it dispatches.
+      function bindPixelActivity() {
+        window.SuperPixel.onActivity(function (evt) {
+          switch (evt.type) {
+            case "session_started":
+              live.textContent = "session " + evt.session.session_id.slice(0, 14) + "…";
+              dot.style.background = "var(--accent)";
+              break;
+            case "field":
+              live.innerHTML = "capturing: <b>" + evt.interaction.name + "</b> (" + evt.interaction.action + ")";
+              dot.style.background = "var(--warn)";
+              break;
+            case "submitted":
+              addRow("consensus", "info", "Lead submitted — running detection layers…");
+              live.innerHTML = "<b>verifying…</b>";
+              break;
+            case "layer_result":
+              addRow(evt.layer, evt.verdict, evt.detail);
+              break;
+            case "info":
+              addRow("consensus", "info", evt.message);
+              break;
+            case "final_verdict":
+              finalEl.style.display = "block";
+              var pass = evt.verdict === "ACCEPT";
+              finalEl.style.background = pass ? "rgba(34,197,94,.15)" : "rgba(239,68,68,.15)";
+              finalEl.style.color = pass ? "var(--pass)" : "var(--fail)";
+              finalEl.textContent =
+                evt.verdict + "  ·  score " + Math.round((evt.score || 0) * 100) + "%";
+              live.textContent = "done";
+              dot.style.background = pass ? "var(--pass)" : "var(--fail)";
+              break;
+          }
+        });
+      }
+
+      if (window.SuperPixel) {
+        bindPixelActivity();
+      } else {
+        document.addEventListener("superpixel:ready", bindPixelActivity);
+      }
+    </script>
+  </body>
+</html>

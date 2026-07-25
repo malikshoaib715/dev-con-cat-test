@@ -222,8 +222,6 @@
       emit({ type: "info", message: "activity stream unavailable for " + leadId });
       return;
     }
-    emit({ type: "info", message: "Subscribed to activity for " + leadId });
-
     var watch = {
       leadId: leadId,
       token: streamToken,
@@ -308,7 +306,12 @@
       }
 
       if (parsed.type === "ping" || parsed.type === "welcome") return;
-      if (parsed.type === "confirm_subscription") return;
+      if (parsed.type === "confirm_subscription") {
+        // Announced here rather than at submit time, so the word means what it
+        // says: the server has accepted the token and frames are now flowing.
+        emit({ type: "info", message: "Subscribed to activity for " + watch.leadId });
+        return;
+      }
       if (parsed.type === "reject_subscription") {
         // The token was refused outright; reconnecting with it would be refused
         // just as fast. Polling carries the same token and answers definitively.
@@ -351,6 +354,7 @@
       watch.socket = null;
     }
 
+    emit({ type: "info", message: "live stream unavailable — polling for activity" });
     poll(watch);
   }
 
@@ -395,6 +399,19 @@
     },
     attach: trackForm,
   };
+
+  // A production snippet is `async`, so a host page's own script may well run
+  // before this file does and find window.SuperPixel missing. This is how such a
+  // page knows when to bind its listener; a page loading the tag synchronously
+  // can keep checking for the global and never see this at all.
+  try {
+    document.dispatchEvent(
+      new CustomEvent("superpixel:ready", { detail: window.SuperPixel })
+    );
+  } catch (error) {
+    // An environment without CustomEvent still has the global; only the
+    // convenience is lost.
+  }
 
   function boot() {
     try {

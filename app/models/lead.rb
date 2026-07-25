@@ -28,6 +28,11 @@ class Lead < ApplicationRecord
   scope :flagged_with,   ->(flag) { where("flags @> ?", [ flag ].to_json) }
   scope :submitted_from, ->(time) { where(submitted_at: time..) }
   scope :submitted_to,   ->(time) { where(submitted_at: ..time) }
+  # The twelve fixture personas keep the ids they were seeded with (L-1001…),
+  # while a lead captured at runtime is given a random one (HasPublicId). That
+  # difference is what lets the demo cheat sheet list the seeded scenarios
+  # without the demo's own submissions piling up underneath them.
+  scope :seeded_personas, -> { where("public_id ~ '^L-[0-9]{4}$'") }
 
   def full_name
     [ first_name, last_name ].compact_blank.join(" ").presence

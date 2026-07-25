@@ -20,6 +20,10 @@ Rails.application.routes.draw do
     root to: "devise/sessions#new"
   end
 
+  # The buyer funnel the pixel is embedded on, served by us so the whole loop —
+  # snippet, ingestion, layers, live panel — can be watched in one place.
+  get "demo", to: "demo#show"
+
   # Public by design: a consent certificate only anyone can check is worth
   # checking. The unguessable cert_… id is the capability.
   get "verify/:public_id", to: "verifications#show", as: :verify_certificate
