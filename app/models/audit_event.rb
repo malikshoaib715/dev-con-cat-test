@@ -20,6 +20,11 @@ class AuditEvent < ApplicationRecord
   scope :for_subject,   ->(subject) { where(subject_type: subject.class.name, subject_id: subject.id) }
   scope :occurred_from, ->(time) { where(occurred_at: time..) }
   scope :occurred_to,   ->(time) { where(occurred_at: ..time) }
+  # The polling fallback's cursor. Ordered and sliced by id rather than by time,
+  # because two events written in the same millisecond must still have a stable
+  # order for a client resuming from one of them.
+  scope :after_id,      ->(id) { where(id: (id.to_i + 1)..).order(:id) }
+  scope :up_to_id,      ->(id) { where(id: ..id.to_i) }
 
   def readonly?
     persisted?

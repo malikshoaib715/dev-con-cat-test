@@ -29,7 +29,11 @@ Rails.application.routes.draw do
   namespace :api do
     namespace :pixel do
       post "visit", to: "visits#create"
-      resources :leads, only: :create
+      resources :leads, only: :create do
+        # The panel's fallback when the socket cannot be kept open. Authorised by
+        # the stream token, not the pixel key, so `:id` is the lead's public id.
+        get :activity, on: :member, to: "activities#show"
+      end
     end
   end
 
