@@ -1,0 +1,52 @@
+<% content_for :title, "Leads" %>
+
+<div class="flex items-baseline justify-between">
+  <h1 class="text-xl font-semibold">Leads</h1>
+  <p class="text-sm text-slate-500"><%= pluralize(@pagy.count, "lead") %></p>
+</div>
+
+<div class="mt-4 overflow-hidden rounded-lg border border-slate-200 bg-white">
+  <table class="min-w-full divide-y divide-slate-200 text-sm">
+    <thead class="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
+      <tr>
+        <th class="px-4 py-3 font-medium">Lead</th>
+        <th class="px-4 py-3 font-medium">Contact</th>
+        <th class="px-4 py-3 font-medium">Pixel</th>
+        <th class="px-4 py-3 font-medium">Status</th>
+        <th class="px-4 py-3 font-medium">Verdict</th>
+        <th class="px-4 py-3 font-medium">Submitted</th>
+      </tr>
+    </thead>
+
+    <tbody class="divide-y divide-slate-100">
+      <% @leads.each do |lead| %>
+        <tr>
+          <td class="px-4 py-3">
+            <div class="font-medium"><%= lead.full_name || "—" %></div>
+            <div class="font-mono text-xs text-slate-500"><%= lead.public_id %></div>
+          </td>
+          <td class="px-4 py-3 text-slate-600">
+            <div><%= lead.email.presence || "—" %></div>
+            <div class="text-xs"><%= lead.phone.presence || "—" %></div>
+          </td>
+          <td class="px-4 py-3 font-mono text-xs text-slate-500"><%= lead.pixel.public_id %></td>
+          <td class="px-4 py-3 text-slate-600"><%= lead.status.humanize %></td>
+          <td class="px-4 py-3"><%= verdict_badge(lead.verdict) %></td>
+          <td class="px-4 py-3 text-slate-500"><%= lead.submitted_at.strftime("%d %b %Y %H:%M") %></td>
+        </tr>
+      <% end %>
+
+      <% if @leads.empty? %>
+        <tr>
+          <td colspan="6" class="px-4 py-10 text-center text-slate-500">
+            No leads captured yet. Embed a pixel and submit a form to see them here.
+          </td>
+        </tr>
+      <% end %>
+    </tbody>
+  </table>
+</div>
+
+<% if @pagy.pages > 1 %>
+  <div class="mt-4 text-sm"><%== pagy_nav(@pagy) %></div>
+<% end %>

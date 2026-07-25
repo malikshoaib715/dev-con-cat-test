@@ -1,0 +1,26 @@
+<header class="border-b border-slate-200 bg-white">
+  <div class="mx-auto flex max-w-7xl items-center justify-between px-6 py-3">
+    <div class="flex items-center gap-6">
+      <span class="text-sm font-semibold tracking-tight">Super&nbsp;Pixel</span>
+
+      <% if user_signed_in? && current_user.account.present? %>
+        <nav class="flex items-center gap-4 text-sm">
+          <%= link_to "Leads", app_leads_path, class: "text-slate-600 hover:text-slate-900" %>
+        </nav>
+      <% end %>
+    </div>
+
+    <% if user_signed_in? %>
+      <div class="flex items-center gap-4 text-sm">
+        <span class="text-slate-500">
+          <%= current_user.name %>
+          &middot;
+          <%= current_user.role.humanize %>
+          <%= "· #{current_user.account.name}" if current_user.account %>
+        </span>
+        <%= button_to "Sign out", destroy_user_session_path, method: :delete,
+                      class: "rounded-md border border-slate-300 px-3 py-1 text-slate-700 hover:bg-slate-100" %>
+      </div>
+    <% end %>
+  </div>
+</header>
