@@ -6,6 +6,7 @@
       <% if user_signed_in? && current_user.account.present? %>
         <nav class="flex items-center gap-4 text-sm">
           <%= link_to "Leads", app_leads_path, class: "text-slate-600 hover:text-slate-900" %>
+          <%= link_to "Pixels", app_pixels_path, class: "text-slate-600 hover:text-slate-900" %>
         </nav>
       <% end %>
     </div>

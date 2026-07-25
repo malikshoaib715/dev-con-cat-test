@@ -18,6 +18,7 @@ class DemoController < ApplicationController
     @pixel = demo_pixel
     return render "demo/unseeded", status: :not_found if @pixel.nil?
 
+    @snippet = Pixels::SnippetGenerator.call(pixel: @pixel, endpoint_base: request.base_url)
     @personas = personas
   end
 

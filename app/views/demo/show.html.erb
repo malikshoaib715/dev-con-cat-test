@@ -6,14 +6,14 @@
     <title>Solar Savings — Free Quote (Super Pixel demo)</title>
 
     <!--
-      THE SUPER PIXEL SNIPPET, exactly as a buyer would paste it — the seeded
-      SolarPro pixel, pointed at this app's own ingestion API. Async, because a
-      tag in a buyer's head must never hold up their page.
+      THE SUPER PIXEL SNIPPET, exactly as a buyer would paste it. Rendered by the
+      same Pixels::SnippetGenerator that the dashboard hands out, so what is
+      demonstrated here and what a buyer is told to copy cannot drift apart.
+
+      `raw` because this is a tag we generated: the id and key are our own
+      columns and the base URL is this application's.
     -->
-    <script async src="/super-pixel.js"
-            data-pixel-id="<%= @pixel.public_id %>"
-            data-pixel-key="<%= @pixel.public_key %>"
-            data-endpoint="<%= request.base_url %>/api/pixel"></script>
+    <%= raw @snippet %>
 
     <style>
       :root {

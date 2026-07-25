@@ -1,0 +1,8 @@
+<% content_for :title, "New pixel" %>
+
+<h1 class="text-xl font-semibold">New pixel</h1>
+<p class="mt-1 text-sm text-slate-500">
+  Creating a pixel mints its public key and gives you a snippet to paste onto a landing page.
+</p>
+
+<%= render "app/pixels/form", pixel: @pixel, url: app_pixels_path, submit_label: "Create pixel" %>

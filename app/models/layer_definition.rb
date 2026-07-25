@@ -13,7 +13,8 @@ class LayerDefinition < ApplicationRecord
   validates :cost_credits, numericality: { only_integer: true, greater_than_or_equal_to: 0 }
   validates :position, presence: true, uniqueness: true
 
-  scope :ordered, -> { order(:position) }
+  scope :ordered,   -> { order(:position) }
+  scope :with_keys, ->(keys) { where(key: keys) }
 
   # A required layer that could not answer caps the verdict at REVIEW; an
   # optional one is allowed to fail open.

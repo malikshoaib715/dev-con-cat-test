@@ -18,10 +18,18 @@ class Pixel < ApplicationRecord
   scope :active,  -> { where(active: true) }
   scope :ordered, -> { order(:created_at) }
 
+  # URLs address a pixel by the px_… id the buyer reads off their own snippet,
+  # never by a sequential row id.
+  def to_param
+    public_id
+  end
+
   # A pixel can only ever run layers its account pays for. The intersection is
   # computed here, in registry order, so no caller can widen it.
+  # Filtered in memory rather than with `.enabled.pluck`, so a list view that has
+  # preloaded the policies answers for every pixel without a query apiece.
   def effective_layer_keys
-    paid_for = account.layer_policies.enabled.pluck(:layer_key)
+    paid_for = account.layer_policies.select(&:enabled).map(&:layer_key)
     Layers::Registry.keys & paid_for & enabled_layers
   end
 

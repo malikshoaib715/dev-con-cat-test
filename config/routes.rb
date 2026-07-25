@@ -43,6 +43,9 @@ Rails.application.routes.draw do
 
   namespace :app do
     resources :leads, only: %i[index]
+    # Looked up by public_id, never by row id: the px_… identifier is the one the
+    # buyer sees in their own snippet.
+    resources :pixels
   end
 
   # Never unauthenticated: the job console exposes lead payloads in job
