@@ -3,10 +3,17 @@
     <div class="flex items-center gap-6">
       <span class="text-sm font-semibold tracking-tight">Super&nbsp;Pixel</span>
 
-      <% if user_signed_in? && current_user.account.present? %>
+      <% if user_signed_in? %>
         <nav class="flex items-center gap-4 text-sm">
-          <%= link_to "Leads", app_leads_path, class: "text-slate-600 hover:text-slate-900" %>
-          <%= link_to "Pixels", app_pixels_path, class: "text-slate-600 hover:text-slate-900" %>
+          <% if current_user.account.present? %>
+            <%= nav_link_to "Leads", app_leads_path %>
+            <%= nav_link_to "Review queue", app_leads_path(verdict: "review"), badge_count: review_queue_count %>
+            <%= nav_link_to "Pixels", app_pixels_path %>
+          <% elsif current_user.super_admin? %>
+            <%# A platform operator has no tenant of their own, so none of the
+                account surfaces mean anything to them. %>
+            <%= nav_link_to "Sidekiq", "/admin/sidekiq" %>
+          <% end %>
         </nav>
       <% end %>
     </div>
