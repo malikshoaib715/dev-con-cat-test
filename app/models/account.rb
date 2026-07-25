@@ -21,9 +21,11 @@ class Account < ApplicationRecord
   has_many :verification_runs,     dependent: :destroy
   has_many :layer_results,         dependent: :destroy
   has_many :consensus_verdicts,    dependent: :destroy
+  # Append-only records refuse to be destroyed, so the association says so too
+  # rather than exploding halfway through a cascade.
   has_many :consent_certificates,  dependent: :restrict_with_error
-  has_many :credit_ledger_entries, dependent: :destroy
-  has_many :audit_events,          dependent: :destroy
+  has_many :credit_ledger_entries, dependent: :restrict_with_error
+  has_many :audit_events,          dependent: :restrict_with_error
   has_many :crm_records,           dependent: :destroy
 
   validates :name, :billing_email, presence: true

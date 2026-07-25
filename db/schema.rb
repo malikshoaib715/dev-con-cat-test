@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_07_26_030003) do
+ActiveRecord::Schema[8.1].define(version: 2026_07_26_040001) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -90,6 +90,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_26_030003) do
     t.index ["account_id", "sequence_number"], name: "index_consent_certificates_on_account_id_and_sequence_number", unique: true
     t.index ["public_id"], name: "index_consent_certificates_on_public_id", unique: true
     t.index ["verification_run_id"], name: "index_consent_certificates_on_verification_run_id", unique: true
+    t.check_constraint "verdict::text = ANY (ARRAY['accept'::character varying::text, 'review'::character varying::text, 'reject'::character varying::text])", name: "consent_certificates_verdict_valid"
   end
 
   create_table "credit_ledger_entries", force: :cascade do |t|
@@ -138,6 +139,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_26_030003) do
     t.index ["position"], name: "index_layer_definitions_on_position", unique: true
     t.check_constraint "cost_credits >= 0", name: "layer_definitions_cost_non_negative"
     t.check_constraint "criticality::text = ANY (ARRAY['required'::character varying::text, 'optional'::character varying::text])", name: "layer_definitions_criticality_valid"
+    t.check_constraint "key::text = ANY (ARRAY['vpn_proxy'::character varying::text, 'anura'::character varying::text, 'trustedform'::character varying::text, 'blacklist_alliance'::character varying::text, 'dnc'::character varying::text, 'phone_validation'::character varying::text, 'email_validation'::character varying::text, 'enrichment'::character varying::text, 'duplicate_detection'::character varying::text, 'voice'::character varying::text])", name: "layer_definitions_key_canonical"
   end
 
   create_table "layer_policies", force: :cascade do |t|
@@ -149,6 +151,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_26_030003) do
     t.datetime "updated_at", null: false
     t.jsonb "weight_overrides", default: {}, null: false
     t.index ["account_id", "layer_key"], name: "index_layer_policies_on_account_id_and_layer_key", unique: true
+    t.check_constraint "layer_key::text = ANY (ARRAY['vpn_proxy'::character varying::text, 'anura'::character varying::text, 'trustedform'::character varying::text, 'blacklist_alliance'::character varying::text, 'dnc'::character varying::text, 'phone_validation'::character varying::text, 'email_validation'::character varying::text, 'enrichment'::character varying::text, 'duplicate_detection'::character varying::text, 'voice'::character varying::text])", name: "layer_policies_layer_key_canonical"
   end
 
   create_table "layer_results", force: :cascade do |t|
@@ -170,6 +173,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_26_030003) do
     t.index ["account_id", "layer_key", "status"], name: "index_layer_results_on_account_id_and_layer_key_and_status"
     t.index ["verification_run_id", "layer_key"], name: "index_layer_results_on_verification_run_id_and_layer_key", unique: true
     t.index ["verification_run_id", "status"], name: "index_layer_results_on_verification_run_id_and_status"
+    t.check_constraint "layer_key::text = ANY (ARRAY['vpn_proxy'::character varying::text, 'anura'::character varying::text, 'trustedform'::character varying::text, 'blacklist_alliance'::character varying::text, 'dnc'::character varying::text, 'phone_validation'::character varying::text, 'email_validation'::character varying::text, 'enrichment'::character varying::text, 'duplicate_detection'::character varying::text, 'voice'::character varying::text])", name: "layer_results_layer_key_canonical"
     t.check_constraint "panel_verdict IS NULL OR (panel_verdict::text = ANY (ARRAY['pass'::character varying::text, 'warn'::character varying::text, 'fail'::character varying::text, 'skip'::character varying::text]))", name: "layer_results_panel_verdict_valid"
     t.check_constraint "status::text = ANY (ARRAY['not_enabled'::character varying::text, 'not_applicable'::character varying::text, 'pending'::character varying::text, 'processing'::character varying::text, 'completed'::character varying::text, 'errored'::character varying::text])", name: "layer_results_status_valid"
   end
@@ -234,6 +238,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_26_030003) do
     t.index ["layer_key", "email_normalized"], name: "index_provider_responses_on_layer_key_and_email_normalized"
     t.index ["layer_key", "lead_ref"], name: "index_provider_responses_on_layer_key_and_lead_ref", unique: true
     t.index ["layer_key", "phone_normalized"], name: "index_provider_responses_on_layer_key_and_phone_normalized"
+    t.check_constraint "layer_key::text = ANY (ARRAY['vpn_proxy'::character varying::text, 'anura'::character varying::text, 'trustedform'::character varying::text, 'blacklist_alliance'::character varying::text, 'dnc'::character varying::text, 'phone_validation'::character varying::text, 'email_validation'::character varying::text, 'enrichment'::character varying::text, 'duplicate_detection'::character varying::text, 'voice'::character varying::text])", name: "provider_responses_layer_key_canonical"
   end
 
   create_table "users", force: :cascade do |t|

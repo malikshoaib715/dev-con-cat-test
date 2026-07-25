@@ -33,6 +33,8 @@ class Lead < ApplicationRecord
     [ first_name, last_name ].compact_blank.join(" ").presence
   end
 
+  private
+
   # An unverifiable lead is worthless to a buyer: they need something to dial or
   # mail. Enforced at ingestion so no run is ever funded for an empty record.
   def reachable_identity_present
