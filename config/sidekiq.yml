@@ -1,0 +1,9 @@
+---
+:concurrency: 10
+:queues:
+  # Weighted so ingestion follow-ups and finalization never starve behind a
+  # burst of layer work.
+  - [ingestion, 4]
+  - [finalize, 3]
+  - [layers, 2]
+  - [default, 1]
