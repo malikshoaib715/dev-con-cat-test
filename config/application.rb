@@ -26,6 +26,16 @@ module SuperPixel
     # Layer work is fanned out across Sidekiq queues (see config/sidekiq.yml).
     config.active_job.queue_adapter = :sidekiq
 
+    # The pixel opens its socket from whichever buyer domain it is embedded on, so
+    # Action Cable's origin allowlist cannot be enumerated — a wildcard allowlist
+    # and this are the same thing, minus the pretence.
+    #
+    # It costs nothing here because the connection is anonymous and grants nothing:
+    # ApplicationCable::Connection identifies no one, and a subscription is only
+    # accepted against a signed, expiring token naming one lead. The security
+    # boundary is the subscription, not the socket.
+    config.action_cable.disable_request_forgery_protection = true
+
     # Providers::Gateway stands in for the vendor HTTP calls. Only development
     # pays the simulated latency that makes the live panel trickle; the suite and
     # the seed run would otherwise spend their time asleep.
