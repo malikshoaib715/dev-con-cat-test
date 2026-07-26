@@ -8,6 +8,16 @@ module OutputCapture
   ensure
     $stdout = original
   end
+
+  # The same capture, kept — for specs that assert on what an operator would read.
+  def capture_stdout
+    original = $stdout
+    $stdout = StringIO.new
+    yield
+    $stdout.string
+  ensure
+    $stdout = original
+  end
 end
 
 RSpec.configure do |config|

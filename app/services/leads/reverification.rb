@@ -18,11 +18,11 @@ module Leads
 
     def call
       # A run nothing is working on any more (VerificationRun.stuck) — the
-      # Redis-was-down case, where the lead and its layer rows committed and the
-      # fan-out never left the building. Dispatch is idempotent and picks up
-      # exactly the layers still outstanding.
+      # Redis-was-down case, where the rows committed and some hand-off to the
+      # queue never happened. The Resumer restarts it from whichever stage was
+      # lost: outstanding layers, or a finalization that never reached a worker.
       resumable_run = @lead.stuck_run
-      return dispatch(resumable_run) if resumable_run
+      return resume(resumable_run) if resumable_run
 
       return not_reverifiable unless @lead.on_hold_insufficient_credits?
       return no_layers if layer_keys.empty?
@@ -70,6 +70,11 @@ module Leads
 
     def dispatch(run)
       result = Verification::Dispatcher.call(run: run)
+      result.failure? ? result : success(run)
+    end
+
+    def resume(run)
+      result = Verification::Resumer.call(run: run)
       result.failure? ? result : success(run)
     end
 

@@ -86,6 +86,19 @@ RSpec.describe Leads::Reverification do
       expect(lead.reload.verification_run.id).to eq(stranded_run.id)
       expect(account.reload.credit_balance).to eq(balance)
     end
+
+    # The other place a queue outage can strike: after the completion gate's
+    # claim, before FinalizeRunJob reached Redis. Re-dispatching layers finds
+    # nothing outstanding, so the button has to reach for the finalizer itself.
+    it "re-enqueues the finalizer for a run stranded mid-finalization" do
+      stranded_run.layer_results.update_all(status: "completed", panel_verdict: "pass")
+      stranded_run.update_columns(status: "finalizing")
+
+      expect { described_class.call(lead: lead) }
+        .to have_enqueued_job(FinalizeRunJob).with(stranded_run.id)
+
+      expect(lead.reload.verification_run.id).to eq(stranded_run.id)
+    end
   end
 
   describe "a lead nobody should be spending credits on again" do
