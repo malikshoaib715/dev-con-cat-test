@@ -148,17 +148,35 @@ RSpec.describe "The demo landing page", :seeded_world, type: :system do
   # the visitor's own browser, which an author of leads can simply not run — and
   # the server keeps the authoritative one: spec/services/verification/
   # finalizer_spec.rb proves a junk number reaching the API is never accepted.
-  it "refuses a phone field with no phone number in it" do
+  # The browser compiles `pattern` with the regex `v` flag, where an unescaped
+  # ( ) or + inside a character class is a syntax error — and a pattern that does
+  # not compile is not an error the page reports, it is a pattern silently
+  # ignored. So this asserts the rule actually bit, field by field, rather than
+  # that the form failed to submit for any of several possible reasons.
+  it "refuses a phone and an address the server would refuse too" do
     visit "/demo"
-    fill_lead_form(first_name: "Alex", last_name: "Fielding",
-                   email: "alex.junk@example.com", phone: ",dc kwc qkcjn q")
+    fill_lead_form(first_name: "qwertyu", last_name: "nghfchmgvmghj",
+                   email: "fghjk@njjj", phone: "999+1234")
     check "consent"
     click_button "Get my quote"
 
-    expect(page.evaluate_script("document.querySelector('[name=phone]').validity.patternMismatch"))
-      .to be(true)
+    expect(mismatched?("phone")).to be(true)
+    expect(mismatched?("email")).to be(true)
     expect(page).to have_no_css(".row", text: "Subscribed to activity for")
-    expect(ActsAsTenant.without_tenant { Lead.exists?(email: "alex.junk@example.com") }).to be(false)
+    expect(ActsAsTenant.without_tenant { Lead.exists?(email: "fghjk@njjj") }).to be(false)
+  end
+
+  it "accepts the notations a real visitor types" do
+    visit "/demo"
+
+    [ "+13105550142", "(310) 555-0142", "310-555-0142", "+44 20 7123 4567" ].each do |notation|
+      fill_in "phone", with: notation
+      expect(mismatched?("phone")).to be(false), "expected the form to accept #{notation}"
+    end
+  end
+
+  def mismatched?(field)
+    page.evaluate_script("document.querySelector('[name=#{field}]').validity.patternMismatch")
   end
 
   it "lists the seeded personas with the verdicts the engine derived for them" do

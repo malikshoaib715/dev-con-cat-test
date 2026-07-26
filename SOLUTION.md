@@ -188,13 +188,25 @@ author of leads controls. Every vendor fixture answers about an identity rather
 than refusing an unusable one, so a junk identity used to collect clean passes
 from every layer that keys on it. Three defences, at increasing depth:
 
-1. **The front door.** A lead needs one identity somebody could actually reach —
-   a dialable phone (`Leads::Normalizer.dialable?`: 10–15 digits, NANP's national
-   length up to E.164's maximum) or a deliverable-shaped address
-   (`deliverable_shape?`: a dotted domain — `type="email"` and RFC 5322 both
-   accept `fghjk@njjj`, because a dotless host is legal mail on a local network).
-   Neither present is a **422 before a credit is reserved**, extending the rule
-   that already refused a lead whose identity was whitespace.
+1. **The front door.** A lead needs one identity somebody could actually reach.
+   A **dialable phone** (`Leads::Normalizer.dialable?`) is both a length and a
+   shape: 10–15 digits, NANP's national length up to E.164's maximum, arranged
+   as runs of digits with at most one separator between two runs and a `+` only
+   at the front. Counting alone is not enough — `9+30976543234567` is fifteen
+   digits with a plus wedged into the middle of them. A **deliverable address**
+   (`deliverable_shape?`) needs a dotted domain, since `type="email"` and RFC
+   5322 both accept `fghjk@njjj`: a dotless host is legal mail on a local
+   network, and a lead's address is not local. Neither present is a **422 before
+   a credit is reserved**, extending the rule that already refused a lead whose
+   identity was whitespace.
+
+   Both shapes are single constants (`DIALABLE_SHAPE`, `DELIVERABLE_SHAPE`), and
+   the demo form's `pattern` attributes are **rendered from them** — the browser's
+   rule and the server's rule are the same string, so the courtesy check cannot
+   drift into accepting what ingestion refuses. (HTML compiles `pattern` with the
+   regex `v` flag, where an uncompilable pattern is silently ignored rather than
+   reported; a system spec asserts `validity.patternMismatch` field by field
+   instead of trusting that the form merely failed to submit.)
 2. **The layers that key on the missing half.** A lead reachable by phone may
    still carry nonsense where its address is, and vice versa. DNC, litigator
    screening and phone consensus report `not_applicable` without a dialable

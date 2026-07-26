@@ -20,13 +20,38 @@ module Leads
     # a number and a string of digits that could never be one.
     DIALABLE_DIGITS = (NORTH_AMERICAN_DIGITS..15)
 
+    # …and what it has to look like, because counting digits says nothing about
+    # where they sit. "9+30976543234567" is fifteen digits with a plus wedged
+    # into the middle of them; no numbering plan on earth produces that, and a
+    # count alone waves it through.
+    #
+    # The shape every real notation shares: an optional leading "+", then runs of
+    # digits, and between two runs at most one separator — a space, a dot or a
+    # hyphen. Separators therefore cannot double up, cannot lead, and cannot
+    # trail, since each one has to have digits on both sides. A group may be
+    # parenthesised, as an area code usually is. Nothing else is admitted: no
+    # letters, no plus except at the front, no extension suffix.
+    #
+    # Which group carries the parentheses is deliberately not policed — that
+    # varies by country, and the digits are what a vendor is given either way.
+    PHONE_GROUP = '(?:\(\d{1,5}\)|\d{1,15})'
+    # Anchorless, so the HTML `pattern` attribute on the buyer's form can be
+    # rendered straight from it: the browser's rule and the server's rule are the
+    # same string, and a change to one cannot quietly leave the other behind.
+    DIALABLE_SHAPE = "\\+?#{PHONE_GROUP}(?:[ .\\-]?#{PHONE_GROUP})*"
+    DIALABLE_FORMAT = /\A#{DIALABLE_SHAPE}\z/
+
     # Deliberately not RFC 5322: that grammar accepts `fghjk@njjj`, and so does
     # every browser's `type="email"`, because a dotless host is legal on a local
     # network. Mail to a lead is not local, so an address a buyer could actually
     # reach needs a dotted domain and a plausible TLD. Everything subtler than
     # this — does the mailbox exist, does the domain accept mail — is the email
     # layer's question, and this only decides whether it is worth asking.
-    DELIVERABLE_ADDRESS = /\A[^@\s]+@[^@\s.]+(?:\.[^@\s.]+)*\.[a-z]{2,}\z/i
+    #
+    # Anchorless and case-explicit for the same reason as the phone shape: the
+    # form's `pattern` is rendered from it, and HTML patterns do not fold case.
+    DELIVERABLE_SHAPE = '[^@\s]+@[^@\s.]+(?:\.[^@\s.]+)*\.[a-zA-Z]{2,}'
+    DELIVERABLE_ADDRESS = /\A#{DELIVERABLE_SHAPE}\z/
 
     class << self
       # Case is folded and surrounding whitespace dropped, and nothing else.
@@ -56,7 +81,10 @@ module Leads
       # that reported "callable" about one would be putting a claim on a
       # certificate that no vendor ever made.
       def dialable?(raw)
-        DIALABLE_DIGITS.cover?(raw.to_s.gsub(/\D/, "").length)
+        typed = raw.to_s.strip
+        return false unless typed.match?(DIALABLE_FORMAT)
+
+        DIALABLE_DIGITS.cover?(typed.gsub(/\D/, "").length)
       end
 
       # Whether an email provider could attempt delivery. Same bar, same reason.

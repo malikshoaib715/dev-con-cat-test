@@ -97,24 +97,46 @@ RSpec.describe Leads::Normalizer do
   # one of them answers about an identity rather than refusing an unusable one.
   describe ".dialable?" do
     it "accepts the shapes the fixtures and a visitor's keyboard produce" do
-      [ "+13105550142", "3105550142", "(310) 555-0142", "+44 20 7123 4567", "03096619196" ]
-        .each { |typed| expect(described_class.dialable?(typed)).to be(true), "expected #{typed}" }
+      [
+        "+13105550142", "13105550142", "3105550142",
+        "(310) 555-0142", "(310)555-0142", "310-555-0142", "310.555.0142",
+        "+1 310 555 0142", "+1 (310) 555-0142", " 310 555 0142 ",
+        "+44 20 7123 4567", "03096619196", "+92 309 6619196"
+      ].each { |typed| expect(described_class.dialable?(typed)).to be(true), "expected #{typed}" }
     end
 
-    it "refuses what could not be a whole number, however filled-in it looks" do
-      # "999+1234" is seven digits in a field somebody did type into. A national
-      # number is ten (NANP) and E.164 stops at fifteen.
-      [ nil, "", ",dc kwc qkcjn q", "abc1", "12345", "999+1234", "1234567890123456" ]
+    it "refuses too few digits to be a whole number, and more than E.164 allows" do
+      # "999+1234" is seven digits in a field somebody did type into.
+      [ nil, "", "12345", "999 1234", "1234567890123456" ]
         .each { |typed| expect(described_class.dialable?(typed)).to be(false), "expected #{typed}" }
     end
 
-    # The honest limit of a shape check, stated as a test so nobody mistakes this
-    # for validation. Fifteen digits is a legal E.164 length, so "+930976543234567"
-    # is *possible* — it is only unassigned, which no count of digits can know.
-    # Whether a possible number is a real one is the phone-consensus layer's
+    # Counting digits says nothing about where they sit, and every one of these
+    # has ten or more of them.
+    it "refuses digits arranged in a shape no numbering plan produces" do
+      {
+        ",dc kwc qkcjn q 3105550142" => "letters between the digits",
+        "9+30976543234567"           => "a plus in the middle of the number",
+        "3105550142+"                => "a plus at the end",
+        "310--555-0142"              => "two separators with nothing between them",
+        "310  555  0142"             => "doubled spaces",
+        "310-555-0142-"              => "a separator with nothing after it",
+        "-310-555-0142"              => "a separator with nothing before it",
+        "310_555_0142"               => "a separator that is not one",
+        "310)555(0142"               => "parentheses around nothing",
+        "310 555 0142 ext 12"        => "an extension this system has nowhere to put"
+      }.each do |typed, why|
+        expect(described_class.dialable?(typed)).to be(false), "expected to refuse #{typed.inspect} — #{why}"
+      end
+    end
+
+    # The honest limit of any shape check, stated as a test so nobody mistakes it
+    # for validation: "+930976543234567" is fifteen digits in a shape a numbering
+    # plan could produce, and only the country code gives it away as unassigned.
+    # Whether a well-formed number is a real one is the phone-consensus layer's
     # question, and it is the vendors who answer it.
-    it "cannot tell a possible number from an assigned one — that is the layer's job" do
-      expect(described_class.dialable?("9+30976543234567")).to be(true)
+    it "cannot tell a well-formed number from an assigned one — that is the layer's job" do
+      expect(described_class.dialable?("+930976543234567")).to be(true)
     end
 
     it "agrees with every phone the fixtures carry" do

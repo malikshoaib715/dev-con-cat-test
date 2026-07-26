@@ -339,11 +339,12 @@ RSpec.describe Verification::Finalizer do
       expect(run.settled_credits).to eq(run.reserved_credits - unrun)
     end
 
-    # The other half of the same lead. This number is fifteen digits on an
-    # unassigned country code — a legal E.164 length, so no shape check can call
-    # it impossible and the phone layers judge it as they would any number. What
-    # is knowable is the address: `fgh@hg` has no mail exchanger anywhere, and
-    # that finding alone is enough to keep the lead off an unqualified accept.
+    # The other half of the same lead, and the honest limit of a shape check:
+    # "+930976543234567" is fifteen digits arranged exactly as a numbering plan
+    # would arrange them, and only the unassigned country code gives it away —
+    # so the phone layers judge it as they would any number. What *is* knowable
+    # is the address: `fgh@hg` has no mail exchanger anywhere, and that finding
+    # alone is enough to keep the lead off an unqualified accept.
     it "reviews a lead whose address could never receive mail" do
       account = fixture_account("acct_solarpro")
       pixel = fixture_pixel_for(account)
@@ -354,7 +355,7 @@ RSpec.describe Verification::Finalizer do
           lead = Leads::IngestionService.call(pixel: pixel, attributes: {
             session_id: "probe-unreachable-address",
             fields: { first_name: "Abc", last_name: "Def",
-                      email: "fgh@hg", phone: "9+30976543234567" }
+                      email: "fgh@hg", phone: "+930976543234567" }
           }).value.lead
         end
       end
