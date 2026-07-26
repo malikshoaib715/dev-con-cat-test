@@ -100,14 +100,41 @@ RSpec.describe Layers::EmailValidationProcessor do
   # be, and `fghjk@njjj` is accepted by every browser's `type="email"`. The
   # fixture would answer about it like any other identity, so the claim to
   # refuse is "2/2 deliverable" about an address with no domain in it.
-  it "reports an address nothing could be delivered to as a check that did not run" do
+  # A lead reachable by phone may carry keyboard mash where its address should
+  # be, and `fghjk@njjj` is accepted by every browser's `type="email"`. The
+  # fixture would answer about it like any other identity, so the claim to
+  # refuse is "2/2 deliverable" about an address with no domain in it — and
+  # silence would be almost as wrong, because this is something we do know.
+  describe "an address that cannot receive mail" do
+    let(:outcome) do
+      account = create(:account)
+      lead = as_tenant(account) { create(:lead, account: account, email: "fghjk@njjj") }
+      process_payload(deliverable_payload, lead: lead)
+    end
+
+    it "reports the finding rather than quoting providers nobody asked" do
+      expect(outcome.status).to eq("completed")
+      expect(outcome.verdict).to eq("unreachable_address")
+      expect(outcome.panel_verdict).to eq("warn")
+      expect(outcome.detail).to eq("fghjk@njjj cannot receive mail — no deliverable domain")
+    end
+
+    it "weighs it, and the weight is one the engine can find" do
+      expect(outcome.signals).to eq([ "unreachable_address" ])
+      expect_signals_to_be_weighted(outcome)
+    end
+  end
+
+  # No address at all is not a bad address: the lead is reachable by phone and
+  # owes this layer nothing.
+  it "stays silent about a lead that never offered an address" do
     account = create(:account)
-    lead = as_tenant(account) { create(:lead, account: account, email: "fghjk@njjj") }
+    lead = as_tenant(account) { create(:lead, account: account, email: nil, email_normalized: nil) }
     outcome = process_payload(deliverable_payload, lead: lead)
 
     expect(outcome.status).to eq("not_applicable")
-    expect(outcome.panel_verdict).to eq("skip")
-    expect(outcome.detail).to eq("no deliverable email address on the lead")
+    expect(outcome.detail).to eq("no email address on the lead")
+    expect(outcome.signals).to be_empty
   end
 
   def deliverable_payload

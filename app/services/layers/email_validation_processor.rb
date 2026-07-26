@@ -9,7 +9,8 @@ module Layers
   # the phone. The verdict is capped by the score, not vetoed.
   class EmailValidationProcessor < BaseProcessor
     def call
-      return no_deliverable_address unless deliverable_address?
+      return no_email_supplied if lead.email.blank?
+      return unreachable_address unless deliverable_address?
       return no_provider_answers if providers.empty?
       return undeliverable if undeliverable?
       return disposable if disposable?
@@ -27,16 +28,30 @@ module Layers
       not_applicable(detail: "no provider responses")
     end
 
-    # A lead may arrive with a dialable phone and a field of keyboard mash where
-    # the address should be. Nothing was checked, so nothing is claimed — and
-    # "2/2 deliverable" about an address with no domain in it is the claim this
-    # exists to prevent.
-    def deliverable_address?
-      Leads::Normalizer.deliverable_shape?(lead.email)
+    # A lead that never offered an address is reachable by phone and owes this
+    # layer nothing. Silence, not a penalty — the mirror of a missing voice
+    # sample.
+    def no_email_supplied
+      not_applicable(detail: "no email address on the lead")
     end
 
-    def no_deliverable_address
-      not_applicable(detail: "no deliverable email address on the lead")
+    # An address that *was* given and cannot receive mail is a different thing:
+    # not a check that could not run, but a finding this layer made on its own.
+    # No provider is quoted for it, because none was asked and none is needed —
+    # a domain with no dot has no mail exchanger anywhere on the internet. It
+    # weighs what two providers agreeing on undeliverable weighs, since it is
+    # the same fact arrived at with more certainty.
+    def unreachable_address
+      completed(
+        verdict: "unreachable_address",
+        panel_verdict: "warn",
+        detail: "#{lead.email} cannot receive mail — no deliverable domain",
+        signals: [ "unreachable_address" ]
+      )
+    end
+
+    def deliverable_address?
+      Leads::Normalizer.deliverable_shape?(lead.email)
     end
 
     # Both signals are emitted when both hold: an undeliverable address on a

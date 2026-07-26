@@ -52,8 +52,12 @@ module Seeds
         "consensus_voip" => -15,
         "line_type_split" => -5
       },
+      # `unreachable_address` weighs what `both_undeliverable` weighs: it is the
+      # same finding — mail cannot be delivered — reached from the address itself
+      # rather than from two vendors agreeing about it.
       "email_validation" => {
         "both_undeliverable" => -35,
+        "unreachable_address" => -35,
         "disposable" => -25,
         "providers_split" => -15
       },

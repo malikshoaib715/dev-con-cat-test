@@ -338,5 +338,36 @@ RSpec.describe Verification::Finalizer do
       unrun = LayerDefinition.where(key: phone_keyed).sum(:cost_credits)
       expect(run.settled_credits).to eq(run.reserved_credits - unrun)
     end
+
+    # The other half of the same lead. This number is fifteen digits on an
+    # unassigned country code — a legal E.164 length, so no shape check can call
+    # it impossible and the phone layers judge it as they would any number. What
+    # is knowable is the address: `fgh@hg` has no mail exchanger anywhere, and
+    # that finding alone is enough to keep the lead off an unqualified accept.
+    it "reviews a lead whose address could never receive mail" do
+      account = fixture_account("acct_solarpro")
+      pixel = fixture_pixel_for(account)
+
+      lead = nil
+      perform_enqueued_jobs do
+        as_tenant(account) do
+          lead = Leads::IngestionService.call(pixel: pixel, attributes: {
+            session_id: "probe-unreachable-address",
+            fields: { first_name: "Abc", last_name: "Def",
+                      email: "fgh@hg", phone: "9+30976543234567" }
+          }).value.lead
+        end
+      end
+
+      expect(lead.reload.verdict).to eq("review")
+
+      row = as_tenant(account) { lead.verification_run.layer_results.find_by!(layer_key: "email_validation") }
+      expect(row.verdict).to eq("unreachable_address")
+      expect(row.score_delta).to eq(-35)
+
+      verdict = as_tenant(account) { lead.verification_run.consensus_verdict }
+      expect(verdict.score).to eq(65)
+      expect(verdict.reasons.first).to include("cannot receive mail")
+    end
   end
 end
