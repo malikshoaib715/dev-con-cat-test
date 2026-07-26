@@ -10,18 +10,22 @@ RSpec.describe "The demo landing page", :seeded_world, type: :system do
   # every frame would be broadcast to nobody — the page would pass a test while
   # proving nothing. Instead the jobs are held until the socket has confirmed, and
   # only then released, so what the panel renders genuinely arrived over the wire.
-  def submit_lead(first_name:, last_name:, email:, phone:, consent: true)
+  def submit_lead(first_name:, last_name:, email:, phone:)
     visit "/demo"
 
-    fill_in "first_name", with: first_name
-    fill_in "last_name",  with: last_name
-    fill_in "email",      with: email
-    fill_in "phone",      with: phone
-    check "consent" if consent
+    fill_lead_form(first_name: first_name, last_name: last_name, email: email, phone: phone)
+    check "consent"
     click_button "Get my quote"
 
     expect(page).to have_css(".row", text: "Subscribed to activity for", wait: 15)
     drain_pipeline
+  end
+
+  def fill_lead_form(first_name:, last_name:, email:, phone:)
+    fill_in "first_name", with: first_name
+    fill_in "last_name",  with: last_name
+    fill_in "email",      with: email
+    fill_in "phone",      with: phone
   end
 
   # Draining once runs the layer jobs; the last of them enqueues the finalizer,
@@ -74,28 +78,50 @@ RSpec.describe "The demo landing page", :seeded_world, type: :system do
     expect(page).to have_no_css(".row .layer", text: "Voice AI")
   end
 
-  # The raw payload is kept as consent evidence, and a checkbox's `.value` reads
-  # "on" whether or not it is ticked — only the pixel's serializer stands between
-  # that DOM quirk and the evidence record. So the box's state must survive
-  # exactly as a native form post would carry it: absent when unticked, "on" when
-  # ticked. A payload claiming consent that was never given is the one lie this
-  # product exists to prevent.
-  it "records the consent box as the visitor left it, not as its DOM default" do
-    submit_lead(first_name: "Alex", last_name: "Fielding",
-                email: "alex.unticked@example.com", phone: "+13105550103",
-                consent: false)
+  # The browser is the first gate: a visitor who never gave affirmative consent
+  # is refused on the page itself — no request leaves, no lead row exists, no
+  # credit is spent. Once the box is ticked the same identity sails through, and
+  # the payload carries the tick as a native form post would: "consent" => "on".
+  it "refuses the submission until the consent box is ticked" do
+    visit "/demo"
+    fill_lead_form(first_name: "Alex", last_name: "Fielding",
+                   email: "alex.gated@example.com", phone: "+13105550103")
+    click_button "Get my quote"
+
+    expect(page.evaluate_script("document.querySelector('[name=consent]').validity.valueMissing")).to be(true)
+    expect(page).to have_no_css(".row", text: "Subscribed to activity for")
+    expect(ActsAsTenant.without_tenant { Lead.exists?(email: "alex.gated@example.com") }).to be(false)
+
+    check "consent"
+    click_button "Get my quote"
+    expect(page).to have_css(".row", text: "Subscribed to activity for", wait: 15)
+    drain_pipeline
+    expect(final_banner).to have_text("ACCEPT")
+
+    payload = ActsAsTenant.without_tenant { Lead.find_by!(email: "alex.gated@example.com").raw_payload }
+    expect(payload).to include("consent" => "on")
+  end
+
+  # The pixel serves every buyer's page, not just ours — and not every page
+  # marks its consent box `required`. Emulating one that does not: the box is
+  # left unticked, the submission goes through, and the payload must record
+  # that state as a native post would — no "consent" key at all. A checkbox's
+  # `.value` reads "on" whether or not it is ticked; only the serializer's
+  # checked-guard stands between that DOM quirk and fabricated consent
+  # evidence, which is the one lie this product exists to prevent.
+  it "records an unticked box as absent when the host page does not require it" do
+    visit "/demo"
+    page.execute_script(%(document.querySelector('[name="consent"]').removeAttribute("required")))
+    fill_lead_form(first_name: "Alex", last_name: "Fielding",
+                   email: "alex.unticked@example.com", phone: "+13105550104")
+    click_button "Get my quote"
+    expect(page).to have_css(".row", text: "Subscribed to activity for", wait: 15)
+    drain_pipeline
     expect(final_banner).to have_text("ACCEPT")
 
     payload = ActsAsTenant.without_tenant { Lead.find_by!(email: "alex.unticked@example.com").raw_payload }
     expect(payload).to include("email" => "alex.unticked@example.com")
     expect(payload).not_to have_key("consent")
-
-    submit_lead(first_name: "Alex", last_name: "Fielding",
-                email: "alex.ticked@example.com", phone: "+13105550104")
-    expect(final_banner).to have_text("ACCEPT")
-
-    payload = ActsAsTenant.without_tenant { Lead.find_by!(email: "alex.ticked@example.com").raw_payload }
-    expect(payload).to include("consent" => "on")
   end
 
   it "lists the seeded personas with the verdicts the engine derived for them" do

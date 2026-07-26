@@ -155,7 +155,11 @@
         <input id="phone" name="phone" type="tel" autocomplete="tel" placeholder="+1 555 555 0142" />
 
         <label class="consent">
-          <input type="checkbox" name="consent" />
+          <%# `required`: a lead the buyer could never legally dial is refused
+              here, by the browser, before a request is made or a credit spent.
+              The pixel itself stays permissive — it records whatever form it is
+              dropped on truthfully, ticked or not. %>
+          <input type="checkbox" name="consent" required />
           <small>
             By checking this box I agree to be contacted by phone/SMS at the number
             provided, including by automated means. (This is the TCPA consent

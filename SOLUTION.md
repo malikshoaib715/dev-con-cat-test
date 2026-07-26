@@ -329,7 +329,11 @@ gets 404 on `/app/*` (they have no account to view).
   "on" whether or not it is ticked, and `raw_payload` is consent evidence, so
   the box is recorded as the visitor left it, exactly as a native form post
   would carry it. Whether consent is *provable* remains the TrustedForm
-  layer's voice.
+  layer's voice. The demo form additionally marks the box `required`: a lead
+  the buyer could never legally dial is refused by the browser before a
+  request is made or a credit spent. The pixel itself stays permissive —
+  buyer pages it is dropped on may not have the attribute, and it records
+  whichever form it serves truthfully (the system spec emulates such a page).
 
 ## 9. Real-time (Q12, Q13)
 
