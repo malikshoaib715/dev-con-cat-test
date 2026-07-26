@@ -324,6 +324,12 @@ gets 404 on `/app/*` (they have no account to view).
 - **Input trust**: IP and user agent come from the connection, never the
   payload; a page-supplied `submitted_at` is ignored because it is an input
   to scoring (duplicate recency, TrustedForm expiry).
+- **Capture fidelity**: the submit serializer carries checkable fields
+  (checkbox/radio) only when actually checked — a checkbox's `.value` reads
+  "on" whether or not it is ticked, and `raw_payload` is consent evidence, so
+  the box is recorded as the visitor left it, exactly as a native form post
+  would carry it. Whether consent is *provable* remains the TrustedForm
+  layer's voice.
 
 ## 9. Real-time (Q12, Q13)
 

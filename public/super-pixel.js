@@ -194,7 +194,13 @@
   function submitLead(fields) {
     var values = {};
     Array.prototype.forEach.call(fields, function (field) {
-      if (field.name) values[field.name] = field.value;
+      if (!field.name) return;
+      // A checkbox or radio carries its value attribute whether or not it is
+      // selected — `.value` on an unticked consent box is still "on". Only the
+      // selected ones exist in a native submission, and a payload that is kept
+      // as consent evidence must never claim a box was ticked when it was not.
+      if ((field.type === "checkbox" || field.type === "radio") && !field.checked) return;
+      values[field.name] = field.value;
     });
 
     var lead = {

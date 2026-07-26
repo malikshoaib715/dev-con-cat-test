@@ -10,14 +10,14 @@ RSpec.describe "The demo landing page", :seeded_world, type: :system do
   # every frame would be broadcast to nobody — the page would pass a test while
   # proving nothing. Instead the jobs are held until the socket has confirmed, and
   # only then released, so what the panel renders genuinely arrived over the wire.
-  def submit_lead(first_name:, last_name:, email:, phone:)
+  def submit_lead(first_name:, last_name:, email:, phone:, consent: true)
     visit "/demo"
 
     fill_in "first_name", with: first_name
     fill_in "last_name",  with: last_name
     fill_in "email",      with: email
     fill_in "phone",      with: phone
-    check "consent"
+    check "consent" if consent
     click_button "Get my quote"
 
     expect(page).to have_css(".row", text: "Subscribed to activity for", wait: 15)
@@ -72,6 +72,30 @@ RSpec.describe "The demo landing page", :seeded_world, type: :system do
     # a layer the buyer did not pay for is absent, not a row saying "skipped".
     expect(page).to have_css(".row .layer", text: "TrustedForm")
     expect(page).to have_no_css(".row .layer", text: "Voice AI")
+  end
+
+  # The raw payload is kept as consent evidence, and a checkbox's `.value` reads
+  # "on" whether or not it is ticked — only the pixel's serializer stands between
+  # that DOM quirk and the evidence record. So the box's state must survive
+  # exactly as a native form post would carry it: absent when unticked, "on" when
+  # ticked. A payload claiming consent that was never given is the one lie this
+  # product exists to prevent.
+  it "records the consent box as the visitor left it, not as its DOM default" do
+    submit_lead(first_name: "Alex", last_name: "Fielding",
+                email: "alex.unticked@example.com", phone: "+13105550103",
+                consent: false)
+    expect(final_banner).to have_text("ACCEPT")
+
+    payload = ActsAsTenant.without_tenant { Lead.find_by!(email: "alex.unticked@example.com").raw_payload }
+    expect(payload).to include("email" => "alex.unticked@example.com")
+    expect(payload).not_to have_key("consent")
+
+    submit_lead(first_name: "Alex", last_name: "Fielding",
+                email: "alex.ticked@example.com", phone: "+13105550104")
+    expect(final_banner).to have_text("ACCEPT")
+
+    payload = ActsAsTenant.without_tenant { Lead.find_by!(email: "alex.ticked@example.com").raw_payload }
+    expect(payload).to include("consent" => "on")
   end
 
   it "lists the seeded personas with the verdicts the engine derived for them" do
