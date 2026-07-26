@@ -82,9 +82,17 @@ class Lead < ApplicationRecord
 
   # An unverifiable lead is worthless to a buyer: they need something to dial or
   # mail. Enforced at ingestion so no run is ever funded for an empty record.
+  #
+  # Reachable, not merely present. A form will hand us whatever was typed into
+  # it, and `fghjk@njjj` with `999+1234` is two full fields containing nothing
+  # anyone could contact — while every vendor fixture answers about an identity
+  # rather than refusing an unusable one, so that lead would collect ten clean
+  # passes and a certificate. One field has to survive Leads::Normalizer for the
+  # verification to be worth funding; which one, and whether the *other* is any
+  # good, stays the layers' business.
   def reachable_identity_present
-    return if email.present? || phone.present?
+    return if Leads::Normalizer.deliverable_shape?(email) || Leads::Normalizer.dialable?(phone)
 
-    errors.add(:base, "a lead needs at least an email address or a phone number")
+    errors.add(:base, "a lead needs at least an email address or a phone number somebody could reach")
   end
 end

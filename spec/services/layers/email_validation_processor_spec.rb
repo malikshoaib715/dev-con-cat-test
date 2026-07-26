@@ -95,4 +95,27 @@ RSpec.describe Layers::EmailValidationProcessor do
     expect(outcome.detail).to eq("no provider responses")
     expect(outcome.signals).to be_empty
   end
+
+  # A lead reachable by phone may carry keyboard mash where its address should
+  # be, and `fghjk@njjj` is accepted by every browser's `type="email"`. The
+  # fixture would answer about it like any other identity, so the claim to
+  # refuse is "2/2 deliverable" about an address with no domain in it.
+  it "reports an address nothing could be delivered to as a check that did not run" do
+    account = create(:account)
+    lead = as_tenant(account) { create(:lead, account: account, email: "fghjk@njjj") }
+    outcome = process_payload(deliverable_payload, lead: lead)
+
+    expect(outcome.status).to eq("not_applicable")
+    expect(outcome.panel_verdict).to eq("skip")
+    expect(outcome.detail).to eq("no deliverable email address on the lead")
+  end
+
+  def deliverable_payload
+    {
+      "providers" => {
+        "zerobounce" => { "status" => "deliverable", "disposable" => false },
+        "neverbounce" => { "status" => "deliverable", "disposable" => false }
+      }
+    }
+  end
 end

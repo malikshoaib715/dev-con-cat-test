@@ -149,7 +149,12 @@
         <input id="last_name" name="last_name" autocomplete="family-name" />
 
         <label for="email">Email</label>
-        <input id="email" name="email" type="email" autocomplete="email" required />
+        <%# `type="email"` alone accepts fghjk@njjj — a dotless host is legal mail
+            on a local network, and the browser has no way to know this one is not.
+            The pattern asks for the dotted domain a lead's address needs. %>
+        <input id="email" name="email" type="email" autocomplete="email" required
+               pattern="[^@\s]+@[^@\s]+\.[a-zA-Z]{2,}"
+               title="A full email address, e.g. name@example.com" />
 
         <label for="phone">Phone</label>
         <%# Phone-shaped characters and a sane length, which stops ",dc kwc qkcjn q"
@@ -161,8 +166,8 @@
                <%# Escaped for the `v`-flag regex modern browsers compile `pattern` with,
                    where ( ) + are reserved inside a class: an unescaped one is a syntax
                    error, and a pattern that does not compile is silently ignored. %>
-               pattern="[\d\+][\d\s\(\)\+\.\-]{6,}"
-               title="Digits, spaces and + ( ) - . only — at least 7 digits, e.g. +1 555 555 0142" />
+               pattern="[\d\+][\d\s\(\)\+\.\-]{9,}"
+               title="A full phone number — at least 10 digits, e.g. +1 555 555 0142" />
 
         <label class="consent">
           <%# `required`: a lead the buyer could never legally dial is refused

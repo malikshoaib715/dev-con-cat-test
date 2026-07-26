@@ -184,16 +184,32 @@ and is capped at REVIEW rather than certified on no evidence; and a **required
 layer the lead gave nothing to judge** caps it for the same reason.
 
 That third rule closes a gap the first two leave open, and it is the one an
-author of leads controls. Three layers are phone lookups — DNC, litigator
-screening, phone consensus — and every vendor fixture answers about an identity
-rather than refusing an unusable one. A lead whose phone field is `,dc kwc qkcjn
-q` therefore collected three clean passes, a score of 100, and a certificate
-attesting that three providers had verified a valid mobile number. Those layers
-now report `not_applicable` ("no dialable phone number on the lead",
-`Leads::Normalizer.dialable?`, ≥ 7 digits), two of the three are required, so the
-verdict caps at REVIEW with flag `required_layer_unjudged` — and settlement
-refunds the checks that never ran. Without it a lead could dodge compliance
-screening by omitting the field the compliance layers key on.
+author of leads controls. Every vendor fixture answers about an identity rather
+than refusing an unusable one, so a junk identity used to collect clean passes
+from every layer that keys on it. Three defences, at increasing depth:
+
+1. **The front door.** A lead needs one identity somebody could actually reach —
+   a dialable phone (`Leads::Normalizer.dialable?`: 10–15 digits, NANP's national
+   length up to E.164's maximum) or a deliverable-shaped address
+   (`deliverable_shape?`: a dotted domain — `type="email"` and RFC 5322 both
+   accept `fghjk@njjj`, because a dotless host is legal mail on a local network).
+   Neither present is a **422 before a credit is reserved**, extending the rule
+   that already refused a lead whose identity was whitespace.
+2. **The layers that key on the missing half.** A lead reachable by phone may
+   still carry nonsense where its address is, and vice versa. DNC, litigator
+   screening and phone consensus report `not_applicable` without a dialable
+   number; email consensus does the same without a deliverable address. Two of
+   those are *required*, so the verdict caps at REVIEW with flag
+   `required_layer_unjudged`, and settlement refunds the checks that never ran.
+3. **What no shape check can reach.** `+930976543234567` is fifteen digits — a
+   legal E.164 length on an unassigned country code — and `jane@example.com`
+   might belong to nobody. Whether a *possible* identity is a *real* one is
+   exactly the question the phone, email and enrichment layers exist to answer,
+   and in this build those vendors are fixtures: `Providers::Gateway` answers an
+   identity it has never seen with a clean default, by design (§11). The demo
+   therefore accepts a plausible-looking invention, and a reviewer should read
+   any 100 on a hand-typed lead as "the mock vendors had nothing against it",
+   not as "verified".
 
 ### Calibration against the twelve (not hardcoded)
 
@@ -416,6 +432,15 @@ Stubbed, per the assignment's explicit permission:
   unknown identity verifies instead of erroring; simulated 250–900 ms latency
   in dev, zero in test. The seam is one class — swapping in HTTP clients
   changes nothing around it.
+
+  **The consequence, stated plainly:** a hand-typed identity nobody has ever
+  seen passes every vendor layer, because a fixture store has nothing against
+  it. That is the right default for a demo — the alternative is a landing page
+  where no real visitor can ever be accepted — but it means a 100 on an invented
+  lead measures the absence of a fixture, not the presence of a person. Shape
+  checks (§4) refuse identities that are *impossible*; only real vendors can
+  refuse ones that are merely *untrue*. Every seeded persona, by contrast,
+  derives its verdict from recorded vendor answers.
 - **Email delivery** — nothing sends mail; users are seeded/invited.
 - **Payments/top-ups** — credit grants and adjustments exist only as seeded
   ledger entries; there is no billing UI. (Voice samples similarly arrive

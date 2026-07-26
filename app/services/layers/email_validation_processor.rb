@@ -9,6 +9,7 @@ module Layers
   # the phone. The verdict is capped by the score, not vetoed.
   class EmailValidationProcessor < BaseProcessor
     def call
+      return no_deliverable_address unless deliverable_address?
       return no_provider_answers if providers.empty?
       return undeliverable if undeliverable?
       return disposable if disposable?
@@ -24,6 +25,18 @@ module Layers
     # layer has, on no evidence at all.
     def no_provider_answers
       not_applicable(detail: "no provider responses")
+    end
+
+    # A lead may arrive with a dialable phone and a field of keyboard mash where
+    # the address should be. Nothing was checked, so nothing is claimed — and
+    # "2/2 deliverable" about an address with no domain in it is the claim this
+    # exists to prevent.
+    def deliverable_address?
+      Leads::Normalizer.deliverable_shape?(lead.email)
+    end
+
+    def no_deliverable_address
+      not_applicable(detail: "no deliverable email address on the lead")
     end
 
     # Both signals are emitted when both hold: an undeliverable address on a

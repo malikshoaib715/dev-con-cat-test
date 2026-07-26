@@ -127,6 +127,30 @@ RSpec.describe "POST /api/pixel/leads" do
 
       expect(response).to have_http_status(:unprocessable_content)
       expect(envelope["message"]).to include("email address or a phone number")
+      expect(leads.where(session_id: "sess_all_blank")).to be_empty
+    end
+
+    # Two fields somebody did fill in, neither of which reaches a human. The
+    # vendor fixtures would each have answered about this identity rather than
+    # refusing it, so before this rule the lead collected ten clean passes, a
+    # score of 100 and a signed certificate — reserving credits to do it.
+    it "refuses a lead whose identity is filled in but unreachable" do
+      submit(body: { session_id: "sess_unreachable",
+                     fields: { email: "fghjk@njjj", phone: "999+1234" } })
+
+      expect(response).to have_http_status(:unprocessable_content)
+      expect(envelope["message"]).to include("somebody could reach")
+      expect(leads.where(session_id: "sess_unreachable")).to be_empty
+    end
+
+    it "keeps a lead reachable by either identity alone" do
+      submit(body: { session_id: "sess_phone_only",
+                     fields: { email: "fghjk@njjj", phone: "(310) 555-0142" } })
+      expect(response).to have_http_status(:created)
+
+      submit(body: { session_id: "sess_email_only",
+                     fields: { email: "real.person@example.com", phone: "999+1234" } })
+      expect(response).to have_http_status(:created)
     end
 
     it "keeps the submitted payload for later dispute" do

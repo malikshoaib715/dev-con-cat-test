@@ -13,11 +13,19 @@ require "action_cable/engine"
 # you've limited to :test, :development, or :production.
 Bundler.require(*Rails.groups)
 
+# Required rather than autoloaded: it is inserted into the middleware stack in
+# the class body below, which runs long before any autoload path exists.
+require_relative "../lib/middleware/pixel_cache_control"
+
 module SuperPixel
   class Application < Rails::Application
     config.load_defaults 8.1
 
-    config.autoload_lib(ignore: %w[assets tasks])
+    config.autoload_lib(ignore: %w[assets tasks middleware])
+
+    # Ahead of ActionDispatch::Static, which serves the pixel and answers before
+    # the router: the header has to be corrected on the response's way back out.
+    config.middleware.insert_before ActionDispatch::Static, PixelCacheControl
 
     # Every timestamp in this system is a compliance artifact; store and reason in UTC.
     config.time_zone = "UTC"

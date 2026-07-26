@@ -91,6 +91,55 @@ RSpec.describe Leads::Normalizer do
     end
   end
 
+  # Reachability, as distinct from identity. `.phone` and `.email` answer "are
+  # these two records the same person"; these two answer "could anyone contact
+  # this one at all" — the question the vendor fixtures never ask, because every
+  # one of them answers about an identity rather than refusing an unusable one.
+  describe ".dialable?" do
+    it "accepts the shapes the fixtures and a visitor's keyboard produce" do
+      [ "+13105550142", "3105550142", "(310) 555-0142", "+44 20 7123 4567", "03096619196" ]
+        .each { |typed| expect(described_class.dialable?(typed)).to be(true), "expected #{typed}" }
+    end
+
+    it "refuses what could not be a whole number, however filled-in it looks" do
+      # "999+1234" is seven digits in a field somebody did type into. A national
+      # number is ten (NANP) and E.164 stops at fifteen.
+      [ nil, "", ",dc kwc qkcjn q", "abc1", "12345", "999+1234", "1234567890123456" ]
+        .each { |typed| expect(described_class.dialable?(typed)).to be(false), "expected #{typed}" }
+    end
+
+    # The honest limit of a shape check, stated as a test so nobody mistakes this
+    # for validation. Fifteen digits is a legal E.164 length, so "+930976543234567"
+    # is *possible* — it is only unassigned, which no count of digits can know.
+    # Whether a possible number is a real one is the phone-consensus layer's
+    # question, and it is the vendors who answer it.
+    it "cannot tell a possible number from an assigned one — that is the layer's job" do
+      expect(described_class.dialable?("9+30976543234567")).to be(true)
+    end
+
+    it "agrees with every phone the fixtures carry" do
+      fixture_phones.each { |phone| expect(described_class.dialable?(phone)).to be(true), phone }
+    end
+  end
+
+  describe ".deliverable_shape?" do
+    it "accepts an address mail could be attempted to" do
+      [ "maria.gonzalez@gmail.com", "a+tag@sub.example.co.uk", " Name@Example.COM " ]
+        .each { |typed| expect(described_class.deliverable_shape?(typed)).to be(true), "expected #{typed}" }
+    end
+
+    # Each of these is accepted by `type="email"` and by RFC 5322: a dotless host
+    # is legal mail on a local network. A lead's address is not local.
+    it "refuses an address with nowhere to deliver to" do
+      [ nil, "", "fghjk@njjj", "fgh@hg", "nobody", "@example.com", "two@@dots.com" ]
+        .each { |typed| expect(described_class.deliverable_shape?(typed)).to be(false), "expected #{typed}" }
+    end
+
+    it "agrees with every address the fixtures carry" do
+      fixture_emails.each { |email| expect(described_class.deliverable_shape?(email)).to be(true), email }
+    end
+  end
+
   def fixture_leads
     @fixture_leads ||= Seeds::MockData.read("leads.json").fetch("leads")
   end
