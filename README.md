@@ -1,69 +1,125 @@
-# Super Pixel — Take-Home Assignment
+# Super Pixel — Consent & Fraud Verification Platform
 
-This repository is a **take-home coding assignment** for a mid-to-senior
-full-stack Ruby on Rails engineer. It contains the brief, the mock data you'll
-build against, and a demoable landing page + pixel snippet. It does **not**
-contain a solution — building the Rails app is the assignment.
+A multi-tenant Rails application built for the take-home brief in
+[`ASSIGNMENT.md`](ASSIGNMENT.md): one embeddable pixel that runs every captured
+lead through ten detection layers in parallel, reaches a consensus verdict with
+its reasons, issues a tamper-evident consent certificate, and streams the whole
+verification live onto the page that captured it.
 
-> Inspired by the "catching consent" super-pixel concept: one pixel that runs a
-> lead through many fraud/consent detection layers at once and issues a verdict
-> plus a consent certificate.
+**Start with [`SOLUTION.md`](SOLUTION.md)** — the data model, the consensus
+engine and its calibration, the tenancy and credit accounting, the real-time
+transport, what is stubbed, and answers to every question in
+[`docs/DESIGN_QUESTIONS.md`](docs/DESIGN_QUESTIONS.md).
 
-## Start here
-1. Read **[`ASSIGNMENT.md`](ASSIGNMENT.md)** — the full brief and deliverables.
-2. Read **[`docs/DESIGN_QUESTIONS.md`](docs/DESIGN_QUESTIONS.md)** — the
-   judgement calls we care about, before you write code.
-3. Skim **[`docs/provider-modules.md`](docs/provider-modules.md)** and
-   **[`docs/data-contracts.md`](docs/data-contracts.md)** to understand the data.
-4. Open **[`docs/pixel-spec.md`](docs/pixel-spec.md)** for the pixel + real-time
-   requirements.
-5. Grading is transparent — see **[`EVALUATION.md`](EVALUATION.md)**.
+## Prerequisites
 
-## Try the live demo right now (no backend needed)
-Open `examples/landing-page.html` in a browser, fill in the form, and submit.
-The embedded `super-pixel.js` runs in **simulation mode** and streams fake
-layer-by-layer results into the live activity panel so you can see the target
-experience. Your task is to make that panel reflect **real** results from the
-Rails app you build.
+| Dependency | Version | Notes |
+|---|---|---|
+| Ruby | ≥ 3.3 (developed on 4.0.6) | see `.ruby-version` |
+| PostgreSQL | ≥ 15 (developed on 17) | `brew services start postgresql@17` |
+| Redis | any recent | `brew services start redis` — jobs (Sidekiq) and Action Cable |
 
-```
-examples/
-├── super-pixel.js     # the embeddable snippet (like a TrustedForm tag)
-└── landing-page.html  # a funnel page with a real-time activity panel
-```
+## Setup
 
-## What's in this repo
-```
-ASSIGNMENT.md          # the brief (read first)
-EVALUATION.md          # how we grade (open on purpose)
-README.md              # this file
-docs/                  # provider specs, data contracts, pixel spec, design Qs
-mock-data/             # leads, accounts, users, CRM, and 8 provider fixtures
-examples/              # pixel snippet + demoable landing page
-```
-
-## Timebox
-**3–5 business days.** Please don't exceed it. Depth over breadth — a crisp core
-with a clear `SOLUTION.md` beats a sprawling half-built system.
-
-## What we're really looking for
-How **you** think. Use AI tools if you like, but the follow-up interview digs
-into your architecture, and the parts that matter — the data model, the
-consensus engine, multi-tenant isolation, credit accounting, and a genuinely
-real-time pixel — are the parts you have to drive yourself. Show us your
-reasoning.
-
-## Submitting
-Push to a Git repo (this zip is structured to become one — see below) and share
-the link, or send a zip of your finished app. Include your `SOLUTION.md`.
-
-### Turning this into a GitHub repo
 ```bash
-cd catching-consent-assignment
-git init
-git add .
-git commit -m "Assignment starter kit"
-git branch -M main
-git remote add origin git@github.com:YOUR-ORG/super-pixel-assignment.git
-git push -u origin main
+bin/setup        # bundle, checks Postgres AND Redis (fails loudly with
+                 # instructions if either is missing), prepares and seeds the DB
 ```
+
+Seeding loads every `mock-data/` file and pushes the twelve fixture leads
+through the **real** pipeline — ingestion, reservation, all ten layers, the
+consensus engine, certificates, settlement. It ends by printing the derived
+verdict for each lead beside the fixture's hint (they match, and the harness
+spec in `spec/seeds/harness_spec.rb` fails if they ever stop matching), the
+post-seed credit balances beside `accounts.json`'s, and the sign-in table below.
+`db:seed` is idempotent; `bin/rails db:reset` rebuilds the world from nothing.
+
+## Run it
+
+```bash
+bin/dev          # web (:3000) + tailwind watcher + sidekiq worker
+```
+
+Sidekiq matters: layer verification is real background work, so the live demo
+needs the worker running. `bin/dev` starts all three processes.
+
+### The two-minute demo
+
+1. Open **http://localhost:3000/demo** — the assignment's landing page, served
+   by this app, with the pixel snippet generated by `Pixels::SnippetGenerator`
+   (the same code path the dashboard hands buyers).
+2. Fill the form with any identity you invent and submit: every layer reports
+   into the live panel as its job finishes, then the verdict banner lands.
+   An unknown identity gets clean vendor defaults and should ACCEPT.
+3. Type one of the seeded personas listed under the form — Robert Vance's
+   phone hard-stops on the DNC list, live.
+4. Sign in (below) and watch `/app/leads` while submitting on `/demo` in a
+   second window: the row appears the moment the lead is captured and its
+   verdict fills in when the pipeline decides. Same audit write, two surfaces.
+
+### Seeded logins
+
+| Email | Password | Role |
+|---|---|---|
+| `admin@catchingconsent.example` | `ChangeMe!superadmin` | super_admin (platform console) |
+| `dana@solarpro.example` | `ChangeMe!sp1` | account_admin, SolarPro |
+| `luis@solarpro.example` | `ChangeMe!sp2` | member, SolarPro |
+| `priya@medicareedge.example` | `ChangeMe!me1` | account_admin, MedicareEdge |
+| `tom@medicareedge.example` | `ChangeMe!me2` | member, MedicareEdge |
+| `chris@autoinsure.example` | `ChangeMe!ai1` | account_admin, AutoInsure |
+
+### The surfaces
+
+| URL | What it is |
+|---|---|
+| `/demo` | the buyer funnel with the live pixel |
+| `/app/leads` | per-account CRM: filters, search, live updates, review queue |
+| `/app/leads/L-1005` | lead detail: all ten layers, the decision, the timeline |
+| `/app/certificates` | consent certificates, re-verified in front of you |
+| `/app/credits` | balance, burn rate, runway, the append-only ledger |
+| `/app/audit_events` | the account's audit explorer |
+| `/verify/cert_…` | **public** certificate verifier — no login, `.json` too |
+| `/admin` | super_admin platform console (flags AutoInsure: past due, ~1 day of runway) |
+| `/admin/sidekiq` | job console, super_admin only |
+
+### See tamper-evidence catch a forgery
+
+```ruby
+bin/rails runner 'cert = ActsAsTenant.without_tenant { ConsentCertificate.first };
+  evidence = cert.evidence; evidence["lead"]["email"] = "forged@example.com";
+  cert.connection.update(ConsentCertificate.sanitize_sql(
+    ["UPDATE consent_certificates SET evidence = ? WHERE id = ?", evidence.to_json, cert.id]));
+  puts "open /verify/#{cert.public_id}"'
+```
+
+Reload that certificate's `/verify` page: **TAMPERED**, with the recomputed
+digest shown beside the recorded one. (`db:seed` restores the original.)
+
+## Tests
+
+```bash
+bin/ci           # rubocop + brakeman + the full RSpec suite (system specs included)
+bundle exec rspec spec/seeds/harness_spec.rb   # just the 12-lead calibration net
+```
+
+## Operations
+
+```bash
+bin/rails credits:audit                 # every balance == Σ(its ledger), or fail
+bin/rails verification:requeue_stuck    # resume runs a queue outage stranded
+```
+
+The second one is half of the Redis-outage story: if Redis is down when a lead
+arrives, the lead and its run still commit, the API still answers 201, a
+`system.enqueue_failed` audit event records what happened, and either this task
+or the lead's **Re-verify** button drives the run to its verdict once the queue
+is back.
+
+## The assignment materials
+
+The original brief and grading rubric ship with the repo:
+[`ASSIGNMENT.md`](ASSIGNMENT.md), [`EVALUATION.md`](EVALUATION.md),
+[`docs/`](docs/) (provider modules, data contracts, pixel spec, design
+questions), [`mock-data/`](mock-data/) (the fixtures the seeds load), and
+[`examples/`](examples/) (the reference snippet and landing page `/demo` was
+rewired from).
