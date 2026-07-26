@@ -4,6 +4,10 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Solar Savings — Free Quote (Super Pixel demo)</title>
+    <%# Explicit so the browser does not probe /favicon.ico and log a 404 into
+        the console of the very page whose console is meant to stay clean. %>
+    <link rel="icon" href="/icon.svg" type="image/svg+xml">
+    <link rel="icon" href="/icon.png" type="image/png">
 
     <!--
       THE SUPER PIXEL SNIPPET, exactly as a buyer would paste it. Rendered by the
@@ -214,9 +218,10 @@
     </div>
 
     <script>
-      // This block is the HOST PAGE consuming the pixel's event stream. In your
-      // build, these same events should be driven by your Rails backend
-      // (via SSE / WebSocket / ActionCable) as real verification jobs finish.
+      // This block is the HOST PAGE consuming the pixel's event stream — kept
+      // exactly as the reference example wrote it. The frames it renders are
+      // real: super-pixel.js relays them over Action Cable (polling when the
+      // socket cannot be kept open) as each verification job finishes.
       var feed = document.getElementById("feed");
       var empty = document.getElementById("empty");
       var live = document.getElementById("live");

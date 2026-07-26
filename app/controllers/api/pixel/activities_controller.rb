@@ -39,7 +39,7 @@ module Api
       # moved for frames would re-read the same lifecycle events on every poll and
       # never get past a run whose latest events are all unrenderable.
       def activity
-        frames = events.filter_map { |event| Realtime::PanelFrame.for(event)&.merge(id: event.id) }
+        frames = events.filter_map { |event| Realtime::PanelFrame.for(event) }
         cursor = events.last&.id || since
 
         { events: frames, cursor: cursor, done: verdict_delivered?(cursor) }

@@ -4,8 +4,10 @@ RSpec.describe Realtime::PanelFrame do
   # Unsaved and untenanted on purpose: the mapping is a pure function of the
   # event, and an in-memory payload keeps the symbol keys that a reloaded row
   # hands back as strings — which is exactly the indifference this has to survive.
+  # The id is set by hand because every frame must carry it: it is what lets the
+  # pixel recognise the same frame arriving over both transports.
   def event(event_type, payload)
-    ActsAsTenant.without_tenant { AuditEvent.new(event_type: event_type, payload: payload) }
+    ActsAsTenant.without_tenant { AuditEvent.new(id: 42, event_type: event_type, payload: payload) }
   end
 
   describe ".stream_name" do
@@ -21,7 +23,7 @@ RSpec.describe Realtime::PanelFrame do
                                         panel_verdict: "pass", detail: "callable, window open"))
 
       expect(frame).to eq(type: "layer_result", layer: "dnc", verdict: "pass",
-                          detail: "callable, window open")
+                          detail: "callable, window open", id: 42)
     end
 
     it "renders a skipped layer with the verdict the processor gave it" do
@@ -38,7 +40,7 @@ RSpec.describe Realtime::PanelFrame do
                                         error_message: "timed out"))
 
       expect(frame).to eq(type: "layer_result", layer: "anura", verdict: "warn",
-                          detail: "layer unavailable")
+                          detail: "layer unavailable", id: 42)
     end
 
     it "upcases the verdict and expresses the score as a fraction the page can scale" do
@@ -47,7 +49,7 @@ RSpec.describe Realtime::PanelFrame do
                                         reasons: [ "all enabled layers passed" ], flags: []))
 
       expect(frame).to eq(type: "final_verdict", verdict: "ACCEPT", score: 0.9,
-                          reasons: [ "all enabled layers passed" ])
+                          reasons: [ "all enabled layers passed" ], id: 42)
     end
 
     it "reads a payload that has been through the database just as it reads a fresh one" do
@@ -58,26 +60,27 @@ RSpec.describe Realtime::PanelFrame do
       end
 
       expect(described_class.for(persisted)).to eq(type: "final_verdict", verdict: "REJECT",
-                                                   score: 0.0, reasons: [ "DNC listed" ])
+                                                   score: 0.0, reasons: [ "DNC listed" ],
+                                                   id: persisted.id)
     end
 
     it "announces reserved credits" do
       frame = described_class.for(event(Audit::Events::CREDITS_RESERVED, total: 17, balance_after: 400))
 
-      expect(frame).to eq(type: "info", message: "credits reserved (17)")
+      expect(frame).to eq(type: "info", message: "credits reserved (17)", id: 42)
     end
 
     it "announces settled credits" do
       frame = described_class.for(event(Audit::Events::CREDITS_SETTLED, refunded: 2, spent: 15))
 
-      expect(frame).to eq(type: "info", message: "credits settled — 2 refunded")
+      expect(frame).to eq(type: "info", message: "credits settled — 2 refunded", id: 42)
     end
 
     it "announces an issued certificate by its public id" do
       frame = described_class.for(event(Audit::Events::CERTIFICATE_ISSUED,
                                         certificate_id: "cert_abc123", sequence_number: 4))
 
-      expect(frame).to eq(type: "info", message: "certificate cert_abc123 issued")
+      expect(frame).to eq(type: "info", message: "certificate cert_abc123 issued", id: 42)
     end
 
     it "returns nothing for events the panel does not render" do

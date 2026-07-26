@@ -25,16 +25,25 @@ module Realtime
     # Returns the frame for an audit event, or nil when the event is not something
     # the panel renders. Most of the spine isn't: the panel is a view of the
     # verification, not of every write.
+    #
+    # Every frame carries its event's id, on the socket exactly as in the polling
+    # response. The id is what lets the pixel deduplicate: frames broadcast before
+    # the page's subscription was confirmed are re-fetched in a catch-up read, and
+    # a socket that fell back to polling re-reads history — both would paint rows
+    # twice if the two transports' frames could not be recognised as the same one.
     def for(event)
       payload = event.payload.with_indifferent_access
-      case event.event_type
-      when Audit::Events::LAYER_COMPLETED, Audit::Events::LAYER_SKIPPED then layer_result(payload)
-      when Audit::Events::LAYER_ERRORED     then errored_layer_result(payload)
-      when Audit::Events::VERDICT_ISSUED    then final_verdict(payload)
-      when Audit::Events::CREDITS_RESERVED  then info("credits reserved (#{payload[:total]})")
-      when Audit::Events::CREDITS_SETTLED   then info("credits settled — #{payload[:refunded]} refunded")
-      when Audit::Events::CERTIFICATE_ISSUED then info("certificate #{payload[:certificate_id]} issued")
-      end
+      frame =
+        case event.event_type
+        when Audit::Events::LAYER_COMPLETED, Audit::Events::LAYER_SKIPPED then layer_result(payload)
+        when Audit::Events::LAYER_ERRORED     then errored_layer_result(payload)
+        when Audit::Events::VERDICT_ISSUED    then final_verdict(payload)
+        when Audit::Events::CREDITS_RESERVED  then info("credits reserved (#{payload[:total]})")
+        when Audit::Events::CREDITS_SETTLED   then info("credits settled — #{payload[:refunded]} refunded")
+        when Audit::Events::CERTIFICATE_ISSUED then info("certificate #{payload[:certificate_id]} issued")
+        end
+
+      frame&.merge(id: event.id)
     end
 
     def layer_result(payload)

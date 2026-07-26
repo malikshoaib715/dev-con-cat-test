@@ -35,6 +35,15 @@
   var RECONNECT_BASE_MS = 1000;
   var POLL_INTERVAL_MS = 3000;
   var SESSION_DEADLINE_MS = 5 * 60 * 1000;
+  // A server that accepts the socket but never answers the subscription — a
+  // proxy that eats frames, an app server in a bad state — must not strand the
+  // panel: silence for this long is treated as a rejection and polling takes
+  // over, because polling answers definitively.
+  var CONFIRM_TIMEOUT_MS = 4000;
+  // The verdict is written before the certificate and the settlement (§9), so
+  // their info frames arrive moments after final_verdict. The socket stays open
+  // this much longer to carry them; the deadline above still bounds everything.
+  var FINAL_LINGER_MS = 2000;
 
   var script =
     document.currentScript ||
@@ -133,6 +142,10 @@
   }
 
   // --- visit beacon ---------------------------------------------------------
+  // No session_started emit here: this runs while the pixel is still defining
+  // itself, so no listener can exist yet. The event is replayed to every
+  // listener as it attaches (see onActivity) — that is what makes the panel's
+  // session label work however late an async host page binds.
   postJson("/visit", {
     session_id: SESSION.session_id,
     pixel_id: SESSION.pixel_id,
@@ -140,7 +153,6 @@
     referrer: SESSION.referrer,
     started_at: SESSION.started_at,
   });
-  emit({ type: "session_started", session: SESSION });
 
   // --- form instrumentation -------------------------------------------------
   // Field-level churn is emitted for the panel to render locally and never sent:
@@ -217,6 +229,13 @@
   // The ladder is: socket, then reconnects with capped backoff, then polling. Any
   // rung can deliver the whole verification on its own; each is only a fallback
   // for the one above failing.
+  //
+  // Both transports send frames stamped with their audit event id, and `seen`
+  // remembers every id delivered. That is what makes the rungs composable:
+  // ingestion writes frames before the page can possibly have subscribed, so
+  // every confirmed subscription starts with a catch-up read, and a socket that
+  // later falls back to polling re-reads history — without the ids, either path
+  // would paint the same rows twice.
   function watchVerification(leadId, streamToken) {
     if (!streamToken) {
       emit({ type: "info", message: "activity stream unavailable for " + leadId });
@@ -226,9 +245,13 @@
       leadId: leadId,
       token: streamToken,
       cursor: 0,
+      seen: {},
       attempts: 0,
       socket: null,
+      polling: false,
       pollTimer: null,
+      confirmTimer: null,
+      lingerTimer: null,
       deadlineTimer: null,
       finished: false,
     };
@@ -246,6 +269,8 @@
 
     clearTimeout(watch.deadlineTimer);
     clearTimeout(watch.pollTimer);
+    clearTimeout(watch.confirmTimer);
+    clearTimeout(watch.lingerTimer);
     if (watch.socket) {
       try {
         watch.socket.close();
@@ -257,12 +282,26 @@
   }
 
   // Frames arrive already in the shape the page renders, from PanelFrame on the
-  // server, so both transports hand them over untouched.
+  // server, so both transports hand them over untouched — each one once, however
+  // many transports carried it.
+  //
+  // The verdict does not stop the watch on the spot: the certificate and
+  // settlement frames are written just after it, and a socket closed at the
+  // verdict would never show them. A short linger carries the housekeeping;
+  // polling needs none, because its `done` flag already follows a full page.
   function deliver(watch, frame) {
     if (watch.finished || !frame || !frame.type) return;
+    if (frame.id) {
+      if (watch.seen[frame.id]) return;
+      watch.seen[frame.id] = true;
+    }
 
     emit(frame);
-    if (frame.type === "final_verdict") stopWatching(watch);
+    if (frame.type === "final_verdict" && !watch.lingerTimer) {
+      watch.lingerTimer = setTimeout(function () {
+        stopWatching(watch);
+      }, FINAL_LINGER_MS);
+    }
   }
 
   function socketUrl() {
@@ -276,7 +315,7 @@
   // frames, hand the rest to the page. Dependency-free on purpose — asking a
   // buyer to load a bundler or a CDN for one socket is not a snippet.
   function openSocket(watch) {
-    if (watch.finished) return;
+    if (watch.finished || watch.polling) return;
 
     var identifier = JSON.stringify({
       channel: "VerificationChannel",
@@ -295,6 +334,10 @@
     socket.addEventListener("open", function () {
       watch.attempts = 0;
       socket.send(JSON.stringify({ command: "subscribe", identifier: identifier }));
+      clearTimeout(watch.confirmTimer);
+      watch.confirmTimer = setTimeout(function () {
+        startPolling(watch);
+      }, CONFIRM_TIMEOUT_MS);
     });
 
     socket.addEventListener("message", function (event) {
@@ -307,9 +350,15 @@
 
       if (parsed.type === "ping" || parsed.type === "welcome") return;
       if (parsed.type === "confirm_subscription") {
+        clearTimeout(watch.confirmTimer);
         // Announced here rather than at submit time, so the word means what it
         // says: the server has accepted the token and frames are now flowing.
         emit({ type: "info", message: "Subscribed to activity for " + watch.leadId });
+        // Everything written before this confirmation — the reserved-credits
+        // frame always, whole layers when they are quick — was broadcast to a
+        // page that was not yet listening. Fetched once here; `seen` keeps the
+        // overlap from painting twice.
+        catchUp(watch);
         return;
       }
       if (parsed.type === "reject_subscription") {
@@ -326,8 +375,11 @@
     });
   }
 
+  // The polling guard matters here: a deliberate close on the way into polling
+  // still fires the socket's close event, and without the guard that event
+  // would start a second, competing transport.
   function reconnectOrPoll(watch) {
-    if (watch.finished) return;
+    if (watch.finished || watch.polling) return;
 
     if (watch.attempts >= RECONNECT_LIMIT) {
       startPolling(watch);
@@ -342,9 +394,13 @@
   }
 
   // Last rung: the same frames, fetched on a timer, authorised by the same token.
+  // One-way and idempotent — however many paths lead here (constructor failure,
+  // exhausted reconnects, rejection, confirmation silence), one poll loop runs.
   function startPolling(watch) {
-    if (watch.finished) return;
+    if (watch.finished || watch.polling) return;
+    watch.polling = true;
 
+    clearTimeout(watch.confirmTimer);
     if (watch.socket) {
       try {
         watch.socket.close();
@@ -358,19 +414,36 @@
     poll(watch);
   }
 
-  function poll(watch) {
-    if (watch.finished) return;
-
-    var url =
+  function activityUrl(watch, since) {
+    return (
       CONFIG.endpoint +
       "/leads/" +
       encodeURIComponent(watch.leadId) +
       "/activity?token=" +
       encodeURIComponent(watch.token) +
       "&since=" +
-      watch.cursor;
+      since
+    );
+  }
 
-    getJson(url).then(function (activity) {
+  // The one-off read behind a confirmed subscription. From zero, deliberately:
+  // the socket carries no cursor, so only a full read can say what it missed —
+  // and `seen` already knows what the page has.
+  function catchUp(watch) {
+    getJson(activityUrl(watch, 0)).then(function (activity) {
+      if (watch.finished || !activity) return;
+
+      (activity.events || []).forEach(function (frame) {
+        deliver(watch, frame);
+      });
+      if (activity.done) stopWatching(watch);
+    });
+  }
+
+  function poll(watch) {
+    if (watch.finished) return;
+
+    getJson(activityUrl(watch, watch.cursor)).then(function (activity) {
       if (watch.finished) return;
 
       if (activity) {
@@ -396,6 +469,14 @@
     session: SESSION,
     onActivity: function (listener) {
       listeners.push(listener);
+      // The session began while this file was still defining itself, before any
+      // listener could exist — replayed here so a page binding late (which an
+      // async snippet guarantees) still gets the event its session label reads.
+      try {
+        listener({ type: "session_started", session: SESSION });
+      } catch (error) {
+        // The listener's failures are its own, on replay as on any emit.
+      }
     },
     attach: trackForm,
   };

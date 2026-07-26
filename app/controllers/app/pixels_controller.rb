@@ -10,8 +10,6 @@ module App
     def index
       # The account and its policies are preloaded so the whole table's effective
       # layers and costs resolve without a query per row.
-      # The account and its policies are preloaded so the whole table's effective
-      # layers and costs resolve without a query per row.
       @pixels = policy_scope(current_account.pixels).ordered.includes(account: :layer_policies)
     end
 

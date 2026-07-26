@@ -18,10 +18,22 @@ RSpec.describe Realtime::Broadcaster do
   end
 
   it "broadcasts a verdict to the lead's own stream as the audit event is written" do
-    record(Audit::Events::VERDICT_ISSUED, verdict: "accept", score: 90, reasons: [ "clean" ], flags: [])
+    event = record(Audit::Events::VERDICT_ISSUED, verdict: "accept", score: 90, reasons: [ "clean" ], flags: [])
 
     expect(ActionCable.server).to have_received(:broadcast)
-      .with(stream, type: "final_verdict", verdict: "ACCEPT", score: 0.9, reasons: [ "clean" ])
+      .with(stream, type: "final_verdict", verdict: "ACCEPT", score: 0.9, reasons: [ "clean" ],
+                    id: event.id)
+  end
+
+  # The id is the two transports' shared vocabulary: the pixel's catch-up read
+  # re-fetches what was broadcast before its subscription was confirmed, and
+  # only the id says "you have already painted this one".
+  it "stamps the socket frame with the event id the polling response carries" do
+    event = record(Audit::Events::LAYER_COMPLETED, layer_key: "dnc", status: "completed",
+                                                   panel_verdict: "pass", detail: "callable")
+
+    expect(ActionCable.server).to have_received(:broadcast)
+      .with(stream, hash_including(id: event.id))
   end
 
   it "broadcasts a layer result to the lead's own stream" do
