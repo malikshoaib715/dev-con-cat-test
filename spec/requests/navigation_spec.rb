@@ -39,6 +39,21 @@ RSpec.describe "Navigation", type: :request do
     expect(response.body).not_to include("Review queue")
   end
 
+  # The verifier is deliberately outside every tenant scope, and the nav renders
+  # on it like anywhere else: the badge has to bring its own tenant.
+  it "renders for a signed-in buyer on the public verifier, which has no tenant" do
+    certificate = as_tenant(account) do
+      run = create(:verification_run, account: account)
+      create(:consent_certificate, account: account, verification_run: run, lead: run.lead)
+    end
+    sign_in create(:user, account: account, role: "member")
+
+    get verify_certificate_path(certificate.public_id)
+
+    expect(response).to have_http_status(:ok)
+    expect(response.body).to include("Review queue")
+  end
+
   it "marks the section the visitor is looking at" do
     sign_in create(:user, account: account, role: "member")
 

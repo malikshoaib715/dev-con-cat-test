@@ -1,7 +1,9 @@
 require "rails_helper"
 
 RSpec.describe Credits::BurnRate do
-  let(:account) { create(:account, credit_balance: 700, settings: { "avg_daily_burn" => 250 }) }
+  # No seeded figure by default: these examples are about what the ledger says.
+  # The account's own stated burn gets its own section below.
+  let(:account) { create(:account, credit_balance: 700, settings: {}) }
 
   def spend(amount, at: Time.current)
     as_tenant(account) do
@@ -13,6 +15,10 @@ RSpec.describe Credits::BurnRate do
   def runway
     as_tenant(account) { described_class.call(account: account) }
   end
+
+  # Spending older than the window is what makes the window a measurement rather
+  # than a first impression, so these examples establish some.
+  before { spend(0, at: 30.days.ago) }
 
   it "measures the week's spending from the ledger" do
     spend(70)
@@ -49,17 +55,40 @@ RSpec.describe Credits::BurnRate do
     expect(runway.daily_burn).to eq(10.0)
   end
 
-  # A fresh account has no week to measure. Reporting infinite runway for one that
-  # has simply not spent yet would tell the dashboard the opposite of the truth.
-  it "falls back to the burn the account was sold on when it has no history" do
-    expect(runway.daily_burn).to eq(250.0)
-    expect(runway.days_to_zero).to eq(2.8)
-  end
+  describe "the burn the account was sold on" do
+    before { account.update!(settings: { "avg_daily_burn" => 250 }) }
 
-  it "reads a seeded burn stored as a string" do
-    account.update!(settings: { "avg_daily_burn" => "250" })
+    # A fresh account has no week to measure. Reporting infinite runway for one
+    # that has simply not spent yet would tell the dashboard the opposite of the
+    # truth.
+    it "stands in when the account has no spending at all" do
+      as_tenant(account) { CreditLedgerEntry.delete_all }
 
-    expect(runway.daily_burn).to eq(250.0)
+      expect(runway.daily_burn).to eq(250.0)
+      expect(runway.days_to_zero).to eq(2.8)
+    end
+
+    # The seeded world in miniature: an account whose whole history is a few
+    # minutes old, spending far below the rate it actually runs at.
+    it "wins over a window the ledger has not filled yet" do
+      as_tenant(account) { CreditLedgerEntry.delete_all }
+      spend(70)
+
+      expect(runway.daily_burn).to eq(250.0)
+    end
+
+    it "gives way once the ledger covers a whole week" do
+      spend(7_000)
+
+      expect(runway.daily_burn).to eq(1_000.0)
+    end
+
+    it "is read even when stored as a string" do
+      as_tenant(account) { CreditLedgerEntry.delete_all }
+      account.update!(settings: { "avg_daily_burn" => "250" })
+
+      expect(runway.daily_burn).to eq(250.0)
+    end
   end
 
   # This runs inside settlement, inside every finalization: a corrupt value must

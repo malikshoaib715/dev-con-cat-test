@@ -40,8 +40,25 @@ module Credits
 
     def daily_burn
       return seeded_burn if recent_movements.empty?
+      return observed_burn if history_spans_window?
 
+      # A rate needs a window to be a rate. Until the ledger covers one, the
+      # figure the plan was sold on stands beside the observed one and the higher
+      # wins — this number's job is to warn somebody before an account's leads
+      # start being held, and understating the burn is the expensive mistake.
+      [ observed_burn, seeded_burn ].max
+    end
+
+    def observed_burn
       (-recent_movements.sum / WINDOW.in_days).round(2)
+    end
+
+    # Is there spending older than the window, i.e. does the window contain a
+    # whole week of this account's behaviour rather than the first hour of it?
+    def history_spans_window?
+      oldest_spend = @account.credit_ledger_entries.spending.minimum(:created_at)
+
+      oldest_spend.present? && oldest_spend <= WINDOW.ago
     end
 
     # Reservations are negative and refunds positive, so their sum is the net spend

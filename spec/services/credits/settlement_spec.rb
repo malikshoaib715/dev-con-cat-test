@@ -136,13 +136,14 @@ RSpec.describe Credits::Settlement do
   end
 
   describe "the low-credit warning" do
-    # AutoInsure is the fixture account that runs dry: 80 credits against a burn
-    # of 410 a day is well under a day of runway.
+    # AutoInsure is the fixture account that runs dry: at the 410 credits a day it
+    # was sold on, the three-day threshold sits at 1,230 credits. A run costing
+    # eight is what carries it across.
+    BELOW_THRESHOLD = 1_229
+
     it "records a flag when a run takes the account under the threshold" do
       run = funded_run("acct_autoinsure")
-      # Eight credits spent this week is a burn of about 1.14 a day, so three
-      # credits left is under two days of runway and this run is what took it there.
-      as_tenant(run.account) { run.account.update!(credit_balance: 3) }
+      as_tenant(run.account) { run.account.update!(credit_balance: BELOW_THRESHOLD) }
 
       expect { settle(run) }.to change { audit_count(Audit::Events::ACCOUNT_FLAGGED_LOW_CREDITS) }.by(1)
     end
@@ -155,7 +156,7 @@ RSpec.describe Credits::Settlement do
 
     it "flags the crossing once rather than on every later run" do
       first = funded_run("acct_autoinsure")
-      as_tenant(first.account) { first.account.update!(credit_balance: 3) }
+      as_tenant(first.account) { first.account.update!(credit_balance: BELOW_THRESHOLD) }
       settle(first)
       second = funded_run("acct_autoinsure", layer_keys: %w[dnc])
 

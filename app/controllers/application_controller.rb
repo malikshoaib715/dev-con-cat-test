@@ -21,10 +21,14 @@ class ApplicationController < ActionController::Base
   # The human loop a REVIEW verdict implies, counted for the nav badge. Lives on
   # the controller rather than in the layout because a view that queries is a
   # view nobody can preload for.
+  # Opens its own tenant rather than trusting the ambient one: this renders on
+  # every page carrying the nav, including the public verifier, which is
+  # deliberately outside every tenant scope.
   def review_queue_count
-    return nil if current_user&.account.nil?
+    account = current_user&.account
+    return nil if account.nil?
 
-    @review_queue_count ||= current_user.account.leads.with_verdict("review").count
+    @review_queue_count ||= ActsAsTenant.with_tenant(account) { account.leads.with_verdict("review").count }
   end
   helper_method :review_queue_count
 
