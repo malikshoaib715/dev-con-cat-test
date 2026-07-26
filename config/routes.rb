@@ -9,7 +9,7 @@ Rails.application.routes.draw do
   # Platform operators have no tenant of their own, so they land on the
   # platform surface rather than an account dashboard.
   authenticated :user, ->(user) { user.super_admin? } do
-    root to: redirect("/admin/sidekiq"), as: :platform_root
+    root to: redirect("/admin"), as: :platform_root
   end
 
   authenticated :user do
@@ -55,6 +55,14 @@ Rails.application.routes.draw do
     resources :audit_events, only: :index
     # Singular: an account has one ledger, and nothing here is writable.
     resource :credits, only: :show, controller: "credits"
+  end
+
+  # The platform operator's surface. Admin::BaseController opts out of tenancy
+  # explicitly, per action, rather than the app being unscoped by default.
+  namespace :admin do
+    root "dashboard#index"
+    resources :accounts, only: %i[index show]
+    resources :audit_events, only: :index
   end
 
   # Never unauthenticated: the job console exposes lead payloads in job

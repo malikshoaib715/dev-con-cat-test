@@ -1,0 +1,10 @@
+<% content_for :title, "Accounts" %>
+
+<div class="flex items-baseline justify-between">
+  <h1 class="text-xl font-semibold">Accounts</h1>
+  <p class="text-sm text-slate-500"><%= pluralize(@summaries.size, "account") %></p>
+</div>
+
+<div class="mt-4">
+  <%= render "admin/accounts_table", summaries: @summaries %>
+</div>

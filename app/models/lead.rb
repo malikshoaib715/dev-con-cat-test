@@ -55,6 +55,11 @@ class Lead < ApplicationRecord
           phone: Leads::Normalizer.phone(term), email: Leads::Normalizer.email(term), pattern: pattern)
   }
 
+  # The drill-down's "what has this account been buying" figure.
+  def self.counts_by_verdict
+    group(:verdict).count
+  end
+
   def full_name
     [ first_name, last_name ].compact_blank.join(" ").presence
   end

@@ -15,6 +15,9 @@
           <% elsif current_user.super_admin? %>
             <%# A platform operator has no tenant of their own, so none of the
                 account surfaces mean anything to them. %>
+            <%= nav_link_to "Dashboard", admin_root_path %>
+            <%= nav_link_to "Accounts", admin_accounts_path %>
+            <%= nav_link_to "Audit", admin_audit_events_path %>
             <%= nav_link_to "Sidekiq", "/admin/sidekiq" %>
           <% end %>
         </nav>

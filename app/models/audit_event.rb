@@ -35,6 +35,7 @@ class AuditEvent < ApplicationRecord
     within_account.where(subject_type: "Lead", subject_id: lead.id)
                   .or(within_account.where(session_id: lead.session_id))
   }
+  scope :for_account,     ->(account_id) { where(account_id: account_id) }
   scope :for_actor_type,  ->(actor_type) { where(actor_type: actor_type) }
   # The explorer's subject filter, which arrives as the two columns from a link
   # rather than as a loaded record.

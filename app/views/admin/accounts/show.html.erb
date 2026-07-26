@@ -1,0 +1,117 @@
+<% content_for :title, @account.name %>
+
+<div class="flex items-baseline justify-between">
+  <div>
+    <h1 class="text-xl font-semibold"><%= @account.name %></h1>
+    <p class="font-mono text-xs text-slate-500"><%= @account.public_id %></p>
+  </div>
+  <div class="flex items-center gap-3">
+    <%= status_badge(@account.status) %>
+    <span class="text-sm text-slate-500"><%= @account.plan.humanize %></span>
+  </div>
+</div>
+
+<div class="mt-4 grid gap-6 md:grid-cols-4">
+  <section class="rounded-lg border border-slate-200 bg-white p-5">
+    <h2 class="text-xs font-semibold uppercase tracking-wide text-slate-500">Balance</h2>
+    <p class="mt-2 text-2xl font-semibold"><%= number_with_delimiter(@account.credit_balance) %></p>
+    <p class="mt-1 text-sm text-slate-500"><%= @account.allowance_used_percent %>% of allowance used</p>
+  </section>
+
+  <section class="rounded-lg border border-slate-200 bg-white p-5">
+    <h2 class="text-xs font-semibold uppercase tracking-wide text-slate-500">Burn / day</h2>
+    <p class="mt-2 text-2xl font-semibold"><%= @summary.daily_burn %></p>
+  </section>
+
+  <section class="rounded-lg border border-slate-200 bg-white p-5">
+    <h2 class="text-xs font-semibold uppercase tracking-wide text-slate-500">Runway</h2>
+    <p class="mt-2 text-2xl font-semibold <%= "text-rose-700" if @summary.flagged? %>">
+      <%= runway_text(@summary.days_to_zero) %>
+    </p>
+  </section>
+
+  <section class="rounded-lg border border-slate-200 bg-white p-5">
+    <h2 class="text-xs font-semibold uppercase tracking-wide text-slate-500">Cycle</h2>
+    <p class="mt-2 text-sm">
+      <%= @account.cycle_start.strftime("%d %b") %> – <%= @account.cycle_end.strftime("%d %b %Y") %>
+    </p>
+    <p class="mt-1 break-all text-xs text-slate-500"><%= @account.billing_email %></p>
+  </section>
+</div>
+
+<div class="mt-8 grid gap-6 lg:grid-cols-2">
+  <section class="rounded-lg border border-slate-200 bg-white p-5">
+    <h2 class="text-sm font-semibold uppercase tracking-wide text-slate-500">Leads by verdict</h2>
+    <dl class="mt-3 space-y-2 text-sm">
+      <% ConsensusVerdict::VERDICTS.each do |verdict| %>
+        <div class="flex items-center justify-between">
+          <dt><%= verdict_badge(verdict) %></dt>
+          <dd class="font-semibold"><%= @lead_counts.fetch(verdict, 0) %></dd>
+        </div>
+      <% end %>
+      <div class="flex items-center justify-between border-t border-slate-100 pt-2">
+        <dt class="text-slate-500">Undecided</dt>
+        <dd class="font-semibold"><%= @lead_counts.fetch(nil, 0) %></dd>
+      </div>
+    </dl>
+  </section>
+
+  <section class="rounded-lg border border-slate-200 bg-white p-5">
+    <h2 class="text-sm font-semibold uppercase tracking-wide text-slate-500">Pixels</h2>
+    <ul class="mt-3 space-y-2 text-sm">
+      <% @pixels.each do |pixel| %>
+        <li class="flex items-baseline justify-between">
+          <span><%= pixel.name %></span>
+          <span class="font-mono text-xs text-slate-500"><%= pixel.public_id %></span>
+        </li>
+      <% end %>
+      <% if @pixels.empty? %>
+        <li class="text-slate-500">No pixels.</li>
+      <% end %>
+    </ul>
+  </section>
+</div>
+
+<section class="mt-8">
+  <h2 class="text-sm font-semibold uppercase tracking-wide text-slate-500">Recent ledger movements</h2>
+  <div class="mt-3 overflow-hidden rounded-lg border border-slate-200 bg-white">
+    <table class="min-w-full divide-y divide-slate-200 text-sm">
+      <thead class="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
+        <tr>
+          <th class="px-4 py-3 font-medium">When</th>
+          <th class="px-4 py-3 font-medium">Movement</th>
+          <th class="px-4 py-3 font-medium">Amount</th>
+          <th class="px-4 py-3 font-medium">Balance after</th>
+          <th class="px-4 py-3 font-medium">Memo</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-slate-100">
+        <% @ledger_entries.each do |entry| %>
+          <tr>
+            <td class="px-4 py-3 text-slate-500"><%= entry.created_at.strftime("%d %b %H:%M") %></td>
+            <td class="px-4 py-3 text-slate-600"><%= entry.entry_type.humanize %></td>
+            <td class="px-4 py-3 <%= entry.amount.negative? ? "text-rose-700" : "text-emerald-700" %>">
+              <%= entry.amount.positive? ? "+#{entry.amount}" : entry.amount %>
+            </td>
+            <td class="px-4 py-3 text-slate-600"><%= number_with_delimiter(entry.balance_after) %></td>
+            <td class="px-4 py-3 text-slate-600"><%= entry.memo.presence || "—" %></td>
+          </tr>
+        <% end %>
+        <% if @ledger_entries.empty? %>
+          <tr><td colspan="5" class="px-4 py-10 text-center text-slate-500">No movements yet.</td></tr>
+        <% end %>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="mt-8">
+  <div class="flex items-baseline justify-between">
+    <h2 class="text-sm font-semibold uppercase tracking-wide text-slate-500">Recent activity</h2>
+    <%= link_to "All of this account's events", admin_audit_events_path(account_id: @account.id),
+                class: "text-sm text-slate-600 underline" %>
+  </div>
+  <div class="mt-3">
+    <%= render "shared/audit_events_table", events: @events, link_subjects: false %>
+  </div>
+</section>

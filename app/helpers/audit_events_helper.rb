@@ -47,10 +47,18 @@ module AuditEventsHelper
     ]
   end
 
-  # A subject is a link only where the reader has a page for it; everything else
+  # The one question only the platform explorer can ask.
+  def platform_account_field(accounts)
+    { name: :account_id, type: :select, label: "Account",
+      options: accounts.map { |account| [ account.name, account.id ] } }
+  end
+
+  # A subject is a link only where the reader has a page for it — which a platform
+  # operator, who has no account dashboard of their own, does not. Everything else
   # is named without pretending to be clickable.
-  def audit_subject_link(event)
+  def audit_subject_link(event, linked: true)
     return "—" if event.subject.nil?
+    return "#{event.subject_type} #{event.subject.try(:public_id) || "##{event.subject_id}"}" unless linked
 
     case event.subject
     when Lead  then link_to event.subject.public_id, app_lead_path(event.subject), class: "hover:underline"

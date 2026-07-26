@@ -1,4 +1,4 @@
-<%# locals: (events:, account_names: nil) %>
+<%# locals: (events:, account_names: nil, link_subjects: true) %>
 <%# One rendering of the spine, shared by the account explorer and the platform
     one. The platform view adds a column naming whose event it is; nothing else
     differs, because nothing else should. %>
@@ -28,7 +28,7 @@
           <% end %>
           <td class="px-4 py-3"><%= audit_event_chip(event.event_type) %></td>
           <td class="px-4 py-3 text-slate-600"><%= audit_actor(event) %></td>
-          <td class="px-4 py-3 font-mono text-xs text-slate-600"><%= audit_subject_link(event) %></td>
+          <td class="px-4 py-3 font-mono text-xs text-slate-600"><%= audit_subject_link(event, linked: link_subjects) %></td>
           <td class="px-4 py-3 text-slate-600">
             <div class="max-w-md truncate"><%= audit_payload_summary(event.payload) %></div>
             <% if event.payload.present? %>

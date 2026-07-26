@@ -1,0 +1,25 @@
+<% content_for :title, "Platform audit" %>
+
+<div class="flex items-baseline justify-between">
+  <div>
+    <h1 class="text-xl font-semibold">Platform audit</h1>
+    <p class="mt-1 text-sm text-slate-500">
+      Every account's spine, and the platform-level events that belong to none of them.
+    </p>
+  </div>
+  <p class="text-sm text-slate-500"><%= pluralize(@pagy.count, "event") %></p>
+</div>
+
+<div class="mt-4">
+  <%= render "shared/filter_bar", url: admin_audit_events_path,
+                                  fields: audit_filter_fields + [ platform_account_field(@accounts) ] %>
+</div>
+
+<div class="mt-4">
+  <%= render "shared/audit_events_table", events: @events,
+                                          account_names: @account_names, link_subjects: false %>
+</div>
+
+<% if @pagy.pages > 1 %>
+  <div class="mt-4 text-sm"><%== pagy_nav(@pagy) %></div>
+<% end %>

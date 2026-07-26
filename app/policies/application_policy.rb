@@ -28,6 +28,12 @@ class ApplicationPolicy
     signed_in? && user.account_id.present?
   end
 
+  # Platform operators have no tenant of their own; what they may do is written
+  # down here so no policy has to reinvent the question.
+  def platform_operator?
+    signed_in? && user.super_admin?
+  end
+
   def account_admin?
     signed_in? && (user.account_admin? || user.super_admin?)
   end

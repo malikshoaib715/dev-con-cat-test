@@ -13,4 +13,10 @@ class ConsensusVerdict < ApplicationRecord
   validates :issued_at, presence: true
 
   scope :recent_first, -> { order(issued_at: :desc) }
+
+  # The platform console's verdict split. A class method rather than a scope
+  # because it returns counts, not a relation.
+  def self.counts_by_verdict
+    group(:verdict).count
+  end
 end

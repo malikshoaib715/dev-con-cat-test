@@ -1,0 +1,49 @@
+<%# locals: (summaries:) %>
+<%# The operator's triage list. A row that needs somebody is coloured and says
+    why — an account that cannot pay, or one whose credits run out before its
+    next verification does. %>
+<div class="overflow-hidden rounded-lg border border-slate-200 bg-white">
+  <table class="min-w-full divide-y divide-slate-200 text-sm">
+    <thead class="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
+      <tr>
+        <th class="px-4 py-3 font-medium">Account</th>
+        <th class="px-4 py-3 font-medium">Plan</th>
+        <th class="px-4 py-3 font-medium">Status</th>
+        <th class="px-4 py-3 font-medium">Balance</th>
+        <th class="px-4 py-3 font-medium">Allowance used</th>
+        <th class="px-4 py-3 font-medium">Burn / day</th>
+        <th class="px-4 py-3 font-medium">Runway</th>
+        <th class="px-4 py-3 font-medium">Flags</th>
+      </tr>
+    </thead>
+
+    <tbody class="divide-y divide-slate-100">
+      <% summaries.each do |summary| %>
+        <% account = summary.account %>
+        <tr class="<%= "bg-rose-50" if summary.flagged? %>">
+          <td class="px-4 py-3">
+            <%= link_to account.name, admin_account_path(account),
+                        class: "font-medium text-slate-900 hover:underline" %>
+            <div class="font-mono text-xs text-slate-500"><%= account.public_id %></div>
+          </td>
+          <td class="px-4 py-3 text-slate-600"><%= account.plan.humanize %></td>
+          <td class="px-4 py-3"><%= status_badge(account.status) %></td>
+          <td class="px-4 py-3 text-slate-600"><%= number_with_delimiter(account.credit_balance) %></td>
+          <td class="px-4 py-3 text-slate-600"><%= account.allowance_used_percent %>%</td>
+          <td class="px-4 py-3 text-slate-600"><%= summary.daily_burn %></td>
+          <td class="px-4 py-3 <%= "font-semibold text-rose-700" if summary.days_to_zero < Account::LOW_CREDIT_DAYS_TO_ZERO %>">
+            <%= runway_text(summary.days_to_zero) %>
+          </td>
+          <td class="px-4 py-3">
+            <% summary.flags.each do |flag| %>
+              <span class="mr-1 inline-flex items-center rounded-full bg-rose-100 px-2 py-0.5 text-xs font-semibold text-rose-800">
+                ⚠ <%= flag %>
+              </span>
+            <% end %>
+            <%= "—" if summary.flags.empty? %>
+          </td>
+        </tr>
+      <% end %>
+    </tbody>
+  </table>
+</div>

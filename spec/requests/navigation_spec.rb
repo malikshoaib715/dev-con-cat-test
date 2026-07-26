@@ -29,6 +29,16 @@ RSpec.describe "Navigation", type: :request do
     expect(response.body).not_to match(/Review queue.*>0</m)
   end
 
+  it "offers a platform operator the console, and none of the account surfaces" do
+    sign_in create(:user, :super_admin)
+
+    get admin_root_path
+
+    expect(response.body).to include("Dashboard", "Accounts", "Audit", "Sidekiq")
+    expect(response.body).not_to include(app_pixels_path)
+    expect(response.body).not_to include("Review queue")
+  end
+
   it "marks the section the visitor is looking at" do
     sign_in create(:user, account: account, role: "member")
 
