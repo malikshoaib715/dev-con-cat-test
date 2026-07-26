@@ -52,6 +52,7 @@ Rails.application.routes.draw do
     # buyer sees in their own snippet.
     resources :pixels
     resources :certificates, only: %i[index show]
+    resources :audit_events, only: :index
     # Singular: an account has one ledger, and nothing here is writable.
     resource :credits, only: :show, controller: "credits"
   end

@@ -9,6 +9,12 @@ class AuditEvent < ApplicationRecord
 
   belongs_to :subject, polymorphic: true, optional: true
 
+  # Who a write can be attributed to, and what it can be written about. Both are
+  # closed sets, so the explorer's filters offer exactly what the spine contains
+  # and a hand-edited value is refused rather than queried for.
+  ACTOR_TYPES   = %w[user pixel system].freeze
+  SUBJECT_TYPES = %w[Lead Pixel Visit Account].freeze
+
   validates :event_type, presence: true, inclusion: { in: ->(_) { Audit::Events::ALL } }
   validates :actor_type, presence: true
   validates :occurred_at, presence: true
@@ -30,6 +36,9 @@ class AuditEvent < ApplicationRecord
                   .or(within_account.where(session_id: lead.session_id))
   }
   scope :for_actor_type,  ->(actor_type) { where(actor_type: actor_type) }
+  # The explorer's subject filter, which arrives as the two columns from a link
+  # rather than as a loaded record.
+  scope :about, ->(subject_type, subject_id) { where(subject_type: subject_type, subject_id: subject_id) }
   scope :occurred_from, ->(time) { where(occurred_at: time..) }
   scope :occurred_to,   ->(time) { where(occurred_at: ..time) }
   # The polling fallback's cursor. Ordered and sliced by id rather than by time,

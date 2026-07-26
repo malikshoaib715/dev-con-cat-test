@@ -20,6 +20,12 @@
                        include_blank: field.fetch(:prompt, "Any"),
                        id: "filter_#{field[:name]}",
                        class: "w-44 rounded-md border-slate-300 text-sm" %>
+      <% when :grouped_select %>
+        <%= select_tag field[:name],
+                       grouped_options_for_select(field[:groups], params[field[:name]]),
+                       include_blank: field.fetch(:prompt, "Any"),
+                       id: "filter_#{field[:name]}",
+                       class: "w-44 rounded-md border-slate-300 text-sm" %>
       <% when :date %>
         <%= date_field_tag field[:name], params[field[:name]],
                            id: "filter_#{field[:name]}",

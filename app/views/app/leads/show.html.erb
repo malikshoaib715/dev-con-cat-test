@@ -166,7 +166,11 @@
 <section class="mt-6 rounded-lg border border-slate-200 bg-white p-5">
   <div class="flex items-baseline justify-between">
     <h2 class="text-sm font-semibold uppercase tracking-wide text-slate-500">Activity</h2>
-    <span class="text-xs text-slate-500"><%= pluralize(@timeline.size, "event") %></span>
+    <span class="text-xs text-slate-500">
+      <%= pluralize(@timeline.size, "event") %> ·
+      <%= link_to "view in audit explorer", app_audit_events_path(session_id: @lead.session_id),
+                  class: "underline" %>
+    </span>
   </div>
   <p class="mt-1 text-sm text-slate-500">
     Everything recorded against this lead and the browsing session it came from —

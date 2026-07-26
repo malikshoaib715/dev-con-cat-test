@@ -30,6 +30,35 @@ module AuditEventsHelper
     JSON.pretty_generate(payload)
   end
 
+  # The explorer's event_type select, grouped by the object each event is about,
+  # built from the frozen taxonomy rather than a list kept beside it.
+  def audit_event_type_groups
+    Audit::Events::ALL.group_by { |event_type| event_type.split(".").first.humanize }.to_a
+  end
+
+  def audit_filter_fields
+    [
+      { name: :event_type, type: :grouped_select, label: "Event", groups: audit_event_type_groups },
+      { name: :actor_type, type: :select, label: "Actor",
+        options: AuditEvent::ACTOR_TYPES.map { |actor| [ actor.humanize, actor ] } },
+      { name: :session_id, type: :text, label: "Session" },
+      { name: :from, type: :date, label: "From" },
+      { name: :to, type: :date, label: "To" }
+    ]
+  end
+
+  # A subject is a link only where the reader has a page for it; everything else
+  # is named without pretending to be clickable.
+  def audit_subject_link(event)
+    return "—" if event.subject.nil?
+
+    case event.subject
+    when Lead  then link_to event.subject.public_id, app_lead_path(event.subject), class: "hover:underline"
+    when Pixel then link_to event.subject.public_id, app_pixel_path(event.subject), class: "hover:underline"
+    else "#{event.subject_type} ##{event.subject_id}"
+    end
+  end
+
   private
 
   def summarized_value(value)

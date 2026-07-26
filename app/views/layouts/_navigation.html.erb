@@ -11,6 +11,7 @@
             <%= nav_link_to "Pixels", app_pixels_path %>
             <%= nav_link_to "Certificates", app_certificates_path %>
             <%= nav_link_to "Credits", app_credits_path %>
+            <%= nav_link_to "Audit", app_audit_events_path %>
           <% elsif current_user.super_admin? %>
             <%# A platform operator has no tenant of their own, so none of the
                 account surfaces mean anything to them. %>
