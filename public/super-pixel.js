@@ -155,10 +155,11 @@
   });
 
   // --- form instrumentation -------------------------------------------------
-  // Field-level churn is emitted for the panel to render locally and never sent:
-  // a visitor tabbing through a form would otherwise write a row per keystroke
-  // into the audit spine (§6). The ingestion endpoint accepts the identity fields
-  // and nothing else, so this stays on the page where it belongs.
+  // Field-level churn is emitted for the panel to render locally as it happens;
+  // nothing is transmitted per event, so a visitor tabbing through a form never
+  // writes a row per keystroke into the audit spine (§6). The accumulated
+  // summary leaves the page exactly once, alongside the lead it explains
+  // (see submitLead).
   function trackForm(form) {
     var fields = form.querySelectorAll("input, select, textarea");
 
@@ -202,6 +203,10 @@
       form_dwell_ms: Date.now() - new Date(SESSION.started_at).getTime(),
       page_url: SESSION.page_url,
       fields: values,
+      // The one moment the interaction summary leaves the page (§6): capped, so
+      // a visitor who sat on the form all afternoon still produces one bounded
+      // write, and the server persists it on the visit this session began with.
+      interactions: SESSION.interactions.slice(0, 100),
     };
     emit({ type: "submitted", lead: lead });
 

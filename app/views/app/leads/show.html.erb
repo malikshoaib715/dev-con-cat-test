@@ -46,6 +46,12 @@
       <dd><%= @lead.form_dwell_ms ? "#{@lead.form_dwell_ms} ms" : "—" %></dd>
     </div>
     <div>
+      <%# The §6 bargain made visible: field churn stays on the page, and only
+          this summary was ever persisted — one bounded write on the visit. %>
+      <dt class="text-xs uppercase tracking-wide text-slate-500">Form activity</dt>
+      <dd><%= @visit&.interactions.present? ? pluralize(@visit.interactions.size, "field event") : "—" %></dd>
+    </div>
+    <div>
       <dt class="text-xs uppercase tracking-wide text-slate-500">Session</dt>
       <dd class="font-mono text-xs"><%= @lead.session_id %></dd>
     </div>

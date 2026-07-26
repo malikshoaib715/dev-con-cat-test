@@ -134,6 +134,73 @@ RSpec.describe "POST /api/pixel/leads" do
     end
   end
 
+  # Field churn never travels per keystroke (§6): the pixel accumulates it on the
+  # page and sends one bounded summary with the submission, which lands on the
+  # visit row the session's beacon created.
+  describe "the interaction summary" do
+    def visit_for(session_id)
+      as_tenant(account) do
+        create(:visit, account: account, pixel: pixel, session_id: session_id, interactions: [])
+      end
+    end
+
+    def interaction(name, action: "focus")
+      { name: name, action: action, at: "2026-07-14T15:01:40Z" }
+    end
+
+    it "persists the submitted summary onto the session's visit" do
+      visit = visit_for("sess_submit_1")
+
+      submit(body: { interactions: [ interaction("email"), interaction("email", action: "blur") ] })
+
+      expect(response).to have_http_status(:created)
+      expect(visit.reload.interactions).to eq([
+        { "name" => "email", "action" => "focus", "at" => "2026-07-14T15:01:40Z" },
+        { "name" => "email", "action" => "blur", "at" => "2026-07-14T15:01:40Z" }
+      ])
+    end
+
+    it "drops anything an interaction carries beyond the contract's three keys" do
+      visit = visit_for("sess_submit_1")
+
+      submit(body: { interactions: [ interaction("email").merge(tracking_blob: "x" * 9000) ] })
+
+      expect(visit.reload.interactions.sole.keys).to contain_exactly("name", "action", "at")
+    end
+
+    it "caps a hostile page's summary rather than storing an unbounded document" do
+      visit = visit_for("sess_submit_1")
+
+      submit(body: { interactions: Array.new(500) { interaction("email") } })
+
+      expect(visit.reload.interactions.size).to eq(Visits::Recorder::MAX_INTERACTIONS)
+    end
+
+    it "never rewrites a summary that is already on the visit" do
+      visit = visit_for("sess_submit_1")
+      as_tenant(account) { visit.update!(interactions: [ interaction("phone").stringify_keys ]) }
+
+      submit(body: { interactions: [ interaction("email") ] })
+
+      expect(visit.reload.interactions.sole).to include("name" => "phone")
+    end
+
+    it "accepts a submission whose session never fired a beacon" do
+      submit(body: { interactions: [ interaction("email") ] })
+
+      expect(response).to have_http_status(:created)
+      expect(leads.sole.status).to eq("verifying")
+    end
+
+    it "leaves the visit untouched when the page had nothing to report" do
+      visit = visit_for("sess_submit_1")
+
+      submit
+
+      expect(visit.reload.interactions).to eq([])
+    end
+  end
+
   # Pre-created rows are what make the three states first-class from t0 rather than
   # inferred later from a row's absence.
   describe "the layer rows it pre-creates" do

@@ -58,6 +58,7 @@ module Leads
       ApplicationRecord.transaction do
         lock_account
         lead = create_lead
+        attach_interaction_summary
         record_receipt(lead)
         run = Verification::RunCreator.call(lead: lead, effective_layer_keys: effective_layer_keys).value
         reservation = Credits::Reservation.call(account: @pixel.account, run: run,
@@ -145,6 +146,22 @@ module Leads
         subject: lead,
         payload: { page_url: lead.page_url, form_dwell_ms: lead.form_dwell_ms }
       )
+    end
+
+    # The interaction summary is persisted once, on the visit this session began
+    # with (§6) — the pixel accumulates the churn client-side and sends it only
+    # here, alongside the submission it explains. First write wins, like the
+    # beacon itself: a summary is a story of one form-fill, not a log to append
+    # to. A session with no beacon has no visit row, and then there is nowhere
+    # for the summary to live — the lead itself stays untouched by page churn.
+    def attach_interaction_summary
+      interactions = Array(@attributes[:interactions]).first(Visits::Recorder::MAX_INTERACTIONS)
+      return if interactions.empty?
+
+      visit = @pixel.visits.find_by(session_id: @attributes.fetch(:session_id))
+      return if visit.nil? || visit.interactions.present?
+
+      visit.update!(interactions: interactions)
     end
 
     # Outside the transaction, deliberately (see Verification::Dispatcher). A

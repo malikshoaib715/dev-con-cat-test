@@ -5,6 +5,9 @@ module Api
     # Where a submitted lead enters the system.
     class LeadsController < BaseController
       SUBMITTED_FIELDS = %i[first_name last_name email phone consent].freeze
+      # Field churn reaches us only as this submitted summary, shaped exactly like
+      # the visit beacon's (§6): the panel renders the live events client-side.
+      INTERACTION_KEYS = %i[name action at].freeze
 
       def create
         result = Leads::IngestionService.call(pixel: current_pixel, attributes: lead_attributes)
@@ -49,7 +52,7 @@ module Api
       # and user agent come from the connection for the same reason.
       def lead_attributes
         permitted = params.permit(:session_id, :pixel_id, :submitted_at, :form_dwell_ms, :page_url,
-                                  fields: SUBMITTED_FIELDS)
+                                  fields: SUBMITTED_FIELDS, interactions: INTERACTION_KEYS)
         raise Errors::ValidationFailed, "session_id is required" if permitted[:session_id].blank?
 
         permitted.to_h.deep_symbolize_keys.except(:submitted_at).merge(
