@@ -20,16 +20,22 @@ module Consensus
     # A layer that errored, and whether its silence is allowed to be fatal.
     Unavailable = Data.define(:layer_key, :required)
 
+    # A layer the lead itself gave nothing to judge — carrying why, because "we
+    # could not check" is only useful to a buyer who is told what was missing.
+    Unjudged = Data.define(:layer_key, :detail)
+
     HARD_STOP_SCORE = 0
     EXACT_DUPLICATE = "exact_duplicate"
 
     DUPLICATE_FLAG            = "duplicate"
     SOFT_DUPLICATE_FLAG       = "soft_duplicate"
     REQUIRED_UNAVAILABLE_FLAG = "required_layer_unavailable"
+    REQUIRED_UNJUDGED_FLAG    = "required_layer_unjudged"
 
     # The whole flag vocabulary, so the CRM's filter offers exactly what the
     # engine can produce rather than a hand-kept list beside it.
-    FLAGS = [ DUPLICATE_FLAG, SOFT_DUPLICATE_FLAG, REQUIRED_UNAVAILABLE_FLAG ].freeze
+    FLAGS = [ DUPLICATE_FLAG, SOFT_DUPLICATE_FLAG, REQUIRED_UNAVAILABLE_FLAG,
+              REQUIRED_UNJUDGED_FLAG ].freeze
 
     def self.call(run:, policy:)
       new(run: run, policy: policy).call
@@ -78,9 +84,15 @@ module Consensus
     # a score of 100 there means "no check found anything", which is indis-
     # tinguishable from "no check ran". Failing open is one flaky vendor not
     # burying a good lead; it is not a certificate that attests to nothing.
+    # A required layer that had nothing to judge is not a vendor outage — the lead
+    # arrived without what the check needs (a DNC lookup with no dialable number).
+    # It caps for the same reason an outage does, and the reason is if anything
+    # stronger: the gap is in the lead itself, and accepting on the strength of
+    # the checks that *could* run would let a lead dodge compliance by omitting
+    # the field the compliance layers key on.
     def capped(banded_verdict)
       return banded_verdict unless banded_verdict == "accept"
-      return "review" if required_unavailable? || nothing_answered?
+      return "review" if required_unavailable? || required_unjudged? || nothing_answered?
 
       banded_verdict
     end
@@ -91,14 +103,15 @@ module Consensus
 
     def reasons
       ReasonBuilder.call(stop: stop, penalties: scoring.penalties, unavailable: unavailable,
-                         answered: !nothing_answered?)
+                         answered: !nothing_answered?, unjudged: unjudged)
     end
 
     def flags
       [
         (DUPLICATE_FLAG if duplicate_stop?),
         (SOFT_DUPLICATE_FLAG if soft_duplicate?),
-        (REQUIRED_UNAVAILABLE_FLAG if required_unavailable?)
+        (REQUIRED_UNAVAILABLE_FLAG if required_unavailable?),
+        (REQUIRED_UNJUDGED_FLAG if required_unjudged?)
       ].compact
     end
 
@@ -119,6 +132,18 @@ module Consensus
 
     def required_unavailable?
       unavailable.any?(&:required)
+    end
+
+    # Only the required layers: an optional layer with nothing to judge (no voice
+    # sample) is an ordinary silence, already recorded on the certificate as
+    # `not_applicable` and deliberately not worth a verdict.
+    def unjudged
+      @unjudged ||= rows.select { |row| row.status == "not_applicable" && @policy.required?(row.layer_key) }
+                        .map { |row| Unjudged.new(layer_key: row.layer_key, detail: row.detail) }
+    end
+
+    def required_unjudged?
+      unjudged.any?
     end
 
     def duplicate_stop?

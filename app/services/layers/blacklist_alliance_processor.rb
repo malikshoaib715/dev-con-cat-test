@@ -10,6 +10,8 @@ module Layers
   # promotes it with `treat_as_hard_stop` and no deploy.
   class BlacklistAllianceProcessor < BaseProcessor
     def call
+      return no_dialable_phone unless dialable_phone?
+
       case payload["status"]
       when "litigator" then litigator
       when "suspected" then suspected

@@ -284,6 +284,49 @@ RSpec.describe Consensus::Engine do
     end
   end
 
+  # The other way a check produces no verdict: the vendor was reachable and the
+  # lead had nothing for it to judge. A compliance question nobody answered is
+  # the same compliance gap whichever side the silence came from — and this side
+  # is the one an author of leads controls, so accepting through it would let a
+  # lead dodge DNC screening by leaving the phone field as punctuation.
+  describe "when a layer had nothing to judge" do
+    let(:required_rules) { policy(required: %w[dnc trustedform]) }
+    let(:unjudged_dnc) do
+      row("dnc", status: "not_applicable", detail: "no dialable phone number on the lead")
+    end
+
+    it "caps an otherwise clean lead at review when a required layer could not judge" do
+      decision = decide([ row("anura", verdict: "good"), unjudged_dnc ], required_rules)
+
+      expect(decision.verdict).to eq("review")
+      expect(decision.flags).to include("required_layer_unjudged")
+      expect(decision.reasons).to include(
+        "DNC / Callback could not be checked: no dialable phone number on the lead — verdict capped at review"
+      )
+    end
+
+    it "does not also claim every layer passed" do
+      decision = decide([ row("anura", verdict: "good"), unjudged_dnc ], required_rules)
+
+      expect(decision.reasons).not_to include(Consensus::ReasonBuilder::CLEAN)
+    end
+
+    it "leaves an optional layer's silence alone — a missing voice sample is not a gap" do
+      decision = decide([ row("anura", verdict: "good"), row("voice", status: "not_applicable") ],
+                        required_rules)
+
+      expect(decision.verdict).to eq("accept")
+      expect(decision.flags).not_to include("required_layer_unjudged")
+      expect(decision.reasons).to eq([ Consensus::ReasonBuilder::CLEAN ])
+    end
+
+    it "leaves a rejection a rejection" do
+      rows = [ row("trustedform", verdict: "mismatch"), unjudged_dnc ]
+
+      expect(decide(rows, required_rules).verdict).to eq("reject")
+    end
+  end
+
   it "carries the policy it used so the verdict stays explainable" do
     decision = decide([ row("anura", verdict: "good") ], policy)
 

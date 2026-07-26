@@ -293,5 +293,50 @@ RSpec.describe Verification::Finalizer do
       expect(verdict.hard_stop_layer).to eq("duplicate_detection")
       expect(verdict.reasons.first).to include(first.public_id)
     end
+
+    # The gap a reviewer finds in one try, by typing nonsense into the phone box.
+    # Every vendor fixture answers about an identity rather than refusing an
+    # unusable one, so all three phone lookups would have reported a clean pass
+    # about a lead nobody can dial — and the certificate would have carried all
+    # three claims. They report that they could not judge, the compliance gap
+    # caps the verdict at review, and the buyer is refunded the checks that never
+    # ran. Ingestion still accepts the lead: it has an email, and a real buyer
+    # would rather hold a reviewable lead than lose the record entirely.
+    it "will not accept a lead whose phone number is not a phone number" do
+      account = fixture_account("acct_solarpro")
+      pixel = fixture_pixel_for(account)
+
+      lead = nil
+      perform_enqueued_jobs do
+        as_tenant(account) do
+          lead = Leads::IngestionService.call(pixel: pixel, attributes: {
+            session_id: "probe-junk-phone",
+            fields: { first_name: "Abc", last_name: "Def",
+                      email: "abc.def@example.com", phone: ",dc kwc qkcjn q" }
+          }).value.lead
+        end
+      end
+
+      expect(lead.reload.verdict).to eq("review")
+      expect(lead.flags).to include("required_layer_unjudged")
+
+      run = as_tenant(account) { lead.verification_run }
+      rows = as_tenant(account) { run.layer_results.index_by(&:layer_key) }
+      phone_keyed = %w[dnc blacklist_alliance phone_validation]
+      phone_keyed.each do |layer_key|
+        expect(rows.fetch(layer_key).status).to eq("not_applicable")
+        expect(rows.fetch(layer_key).detail).to eq("no dialable phone number on the lead")
+        expect(rows.fetch(layer_key).verdict).to be_nil
+      end
+
+      # The certificate says the same thing the run does — a check that did not
+      # run must never read as one that passed.
+      certificate = as_tenant(account) { lead.consent_certificate }
+      expect(certificate.evidence["layers"]["dnc"]["status"]).to eq("not_applicable")
+
+      # And the buyer pays for the seven checks that answered, not the ten booked.
+      unrun = LayerDefinition.where(key: phone_keyed).sum(:cost_credits)
+      expect(run.settled_credits).to eq(run.reserved_credits - unrun)
+    end
   end
 end

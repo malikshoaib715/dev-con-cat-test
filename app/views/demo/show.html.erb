@@ -149,10 +149,20 @@
         <input id="last_name" name="last_name" autocomplete="family-name" />
 
         <label for="email">Email</label>
-        <input id="email" name="email" type="email" autocomplete="email" />
+        <input id="email" name="email" type="email" autocomplete="email" required />
 
         <label for="phone">Phone</label>
-        <input id="phone" name="phone" type="tel" autocomplete="tel" placeholder="+1 555 555 0142" />
+        <%# Phone-shaped characters and a sane length, which stops ",dc kwc qkcjn q"
+            at the keyboard. A courtesy, not a control: the browser is the visitor's
+            own, so the server decides what is dialable (Leads::Normalizer.dialable?)
+            and the phone-keyed layers refuse to judge what is not. %>
+        <input id="phone" name="phone" type="tel" autocomplete="tel"
+               placeholder="+1 555 555 0142" required
+               <%# Escaped for the `v`-flag regex modern browsers compile `pattern` with,
+                   where ( ) + are reserved inside a class: an unescaped one is a syntax
+                   error, and a pattern that does not compile is silently ignored. %>
+               pattern="[\d\+][\d\s\(\)\+\.\-]{6,}"
+               title="Digits, spaces and + ( ) - . only — at least 7 digits, e.g. +1 555 555 0142" />
 
         <label class="consent">
           <%# `required`: a lead the buyer could never legally dial is refused
@@ -294,6 +304,7 @@
               addRow("consensus", "info", evt.message);
               break;
             case "final_verdict":
+              releaseSubmitButton();
               finalEl.style.display = "block";
               var pass = evt.verdict === "ACCEPT";
               finalEl.style.background = pass ? "rgba(34,197,94,.15)" : "rgba(239,68,68,.15)";
@@ -305,6 +316,34 @@
               break;
           }
         });
+      }
+
+      // The buyer's own double-submit guard, which every real lead form wants and
+      // this demo therefore models. The server already settles a repeat of the
+      // same session against the lead it has — one verification, one charge — but
+      // a form that stays clickable while its first submission is in flight
+      // invites the doubt, and an impatient second click is the commonest way a
+      // visitor asks whether anything happened.
+      var leadForm = document.querySelector("[data-pixel-form]");
+      var submitButton = leadForm.querySelector('button[type="submit"]');
+      var idleLabel = submitButton.textContent;
+      var releaseTimer = null;
+
+      // Fires only once the browser's own checks have passed, which is what makes
+      // `required` on consent and `pattern` on the phone the first gate of all.
+      leadForm.addEventListener("submit", function () {
+        submitButton.disabled = true;
+        submitButton.textContent = "Verifying…";
+        // The verdict normally releases it. This is the backstop for the runs that
+        // never reach one: no credits, a vendor outage, a socket that never opened.
+        clearTimeout(releaseTimer);
+        releaseTimer = setTimeout(releaseSubmitButton, 30000);
+      });
+
+      function releaseSubmitButton() {
+        clearTimeout(releaseTimer);
+        submitButton.disabled = false;
+        submitButton.textContent = idleLabel;
       }
 
       if (window.SuperPixel) {

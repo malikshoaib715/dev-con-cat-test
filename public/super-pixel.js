@@ -231,6 +231,17 @@
         emit({ type: "info", message: "verification unavailable — lead not submitted" });
         return;
       }
+      // The server settles a repeat submission of the same session against the
+      // lead it already has, so nothing is verified twice and nothing is charged
+      // twice. Said out loud, because the panel is about to replay that lead's
+      // history and an unannounced replay is indistinguishable from a second
+      // verification that happened to reach the same verdict.
+      if (result.body.replayed) {
+        emit({
+          type: "info",
+          message: "already submitted — showing the original verification for " + result.body.lead_id,
+        });
+      }
 
       watchVerification(result.body.lead_id, result.body.stream_token);
     });

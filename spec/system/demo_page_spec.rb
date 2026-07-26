@@ -124,6 +124,43 @@ RSpec.describe "The demo landing page", :seeded_world, type: :system do
     expect(payload).not_to have_key("consent")
   end
 
+  # A repeat submission from an unreloaded page carries the session id the first
+  # one did, so the server settles it against the lead it already has — one
+  # verification, one charge. The panel is then about to replay that lead's
+  # history, which paints the same layers and the same banner as a fresh run, so
+  # an unannounced replay is indistinguishable from a second verification that
+  # happened to agree. It says which one it is.
+  it "says when a resubmission is the original lead rather than a new one" do
+    submit_lead(first_name: "Alex", last_name: "Fielding",
+                email: "alex.replay@example.com", phone: "+13105550105")
+    expect(final_banner).to have_text("ACCEPT")
+    leads_before = ActsAsTenant.without_tenant { Lead.count }
+
+    click_button "Get my quote"
+
+    expect(page).to have_css(".row", text: "already submitted — showing the original verification",
+                                     wait: 15)
+    drain_pipeline
+    expect(ActsAsTenant.without_tenant { Lead.count }).to eq(leads_before)
+  end
+
+  # The first of the two gates on an unusable number. This one is a courtesy —
+  # the visitor's own browser, which an author of leads can simply not run — and
+  # the server keeps the authoritative one: spec/services/verification/
+  # finalizer_spec.rb proves a junk number reaching the API is never accepted.
+  it "refuses a phone field with no phone number in it" do
+    visit "/demo"
+    fill_lead_form(first_name: "Alex", last_name: "Fielding",
+                   email: "alex.junk@example.com", phone: ",dc kwc qkcjn q")
+    check "consent"
+    click_button "Get my quote"
+
+    expect(page.evaluate_script("document.querySelector('[name=phone]').validity.patternMismatch"))
+      .to be(true)
+    expect(page).to have_no_css(".row", text: "Subscribed to activity for")
+    expect(ActsAsTenant.without_tenant { Lead.exists?(email: "alex.junk@example.com") }).to be(false)
+  end
+
   it "lists the seeded personas with the verdicts the engine derived for them" do
     visit "/demo"
 

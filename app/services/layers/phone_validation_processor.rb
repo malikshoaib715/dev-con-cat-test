@@ -13,6 +13,7 @@ module Layers
     DISSENT_THRESHOLD = 2
 
     def call
+      return no_dialable_phone unless dialable_phone?
       return no_provider_answers if providers.empty?
       return consensus_invalid if invalid_providers.size >= DISSENT_THRESHOLD
       return providers_disagree if invalid_providers.any?

@@ -10,19 +10,21 @@ module Consensus
     CLEAN = "all enabled layers passed"
     NOTHING_ANSWERED = "no layer returned a verdict — verdict capped at review"
 
-    def self.call(stop:, penalties:, unavailable:, answered:)
-      new(stop: stop, penalties: penalties, unavailable: unavailable, answered: answered).call
+    def self.call(stop:, penalties:, unavailable:, answered:, unjudged: [])
+      new(stop: stop, penalties: penalties, unavailable: unavailable, answered: answered,
+          unjudged: unjudged).call
     end
 
-    def initialize(stop:, penalties:, unavailable:, answered:)
+    def initialize(stop:, penalties:, unavailable:, answered:, unjudged: [])
       @stop = stop
       @penalties = penalties
       @unavailable = unavailable
       @answered = answered
+      @unjudged = unjudged
     end
 
     def call
-      leading_reasons + unavailability_notes
+      leading_reasons + unavailability_notes + unjudged_notes
     end
 
     private
@@ -32,7 +34,7 @@ module Consensus
       # "Everything passed" and "nothing ran" both produce an empty penalty list
       # and must never read the same way.
       return [ NOTHING_ANSWERED ] unless @answered
-      return [ CLEAN ] if @penalties.empty? && @unavailable.empty?
+      return [ CLEAN ] if @penalties.empty? && @unavailable.empty? && @unjudged.empty?
 
       ranked_penalties.map { |penalty| penalty_reason(penalty) }
     end
@@ -59,6 +61,14 @@ module Consensus
         next "required layer unavailable: #{layer.layer_key} — verdict capped at review" if layer.required
 
         "optional layer unavailable: #{layer.layer_key} — recorded, not counted as a pass"
+      end
+    end
+
+    # Said out loud for the same reason an unavailable layer is, and worded so the
+    # buyer can act on it: the check did not fail, it never got what it needed.
+    def unjudged_notes
+      @unjudged.sort_by { |layer| position(layer.layer_key) }.map do |layer|
+        "#{label(layer.layer_key)} could not be checked: #{layer.detail} — verdict capped at review"
       end
     end
 

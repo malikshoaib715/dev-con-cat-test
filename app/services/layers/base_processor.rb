@@ -51,6 +51,20 @@ module Layers
       )
     end
 
+    # The three layers that are phone lookups share one precondition: there has to
+    # be a number to look up. A lead may legitimately arrive with only an email
+    # (ingestion requires one identity, not both), and every vendor fixture here
+    # answers about an identity rather than refusing an unusable one — so without
+    # this guard a lead whose "phone" is punctuation collects three clean passes
+    # and a certificate attesting to them.
+    def dialable_phone?
+      Leads::Normalizer.dialable?(lead.phone_normalized)
+    end
+
+    def no_dialable_phone
+      not_applicable(detail: "no dialable phone number on the lead")
+    end
+
     # The layer had nothing to judge — no voice sample, no identity to match. That
     # is not a pass and it is not a failure, and the certificate says so.
     def not_applicable(detail:)

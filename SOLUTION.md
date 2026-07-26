@@ -177,11 +177,23 @@ nothing (the finalizer does). Resolution order:
 5. **Reasons**: one line per layer that moved the score, largest impact first,
    carrying the layer's own sentence about what it found.
 
-Two honesty rules sit on top: a
-**required** layer that errors caps the verdict at REVIEW (Q5), and an accept
-requires at least one layer to have actually answered — a run where everything
-errored or was skipped reaches 100 having verified nothing, and is capped at
-REVIEW rather than certified on no evidence.
+Three honesty rules sit on top. A **required** layer that errors caps the verdict
+at REVIEW (Q5); an accept requires at least one layer to have actually answered —
+a run where everything errored or was skipped reaches 100 having verified nothing,
+and is capped at REVIEW rather than certified on no evidence; and a **required
+layer the lead gave nothing to judge** caps it for the same reason.
+
+That third rule closes a gap the first two leave open, and it is the one an
+author of leads controls. Three layers are phone lookups — DNC, litigator
+screening, phone consensus — and every vendor fixture answers about an identity
+rather than refusing an unusable one. A lead whose phone field is `,dc kwc qkcjn
+q` therefore collected three clean passes, a score of 100, and a certificate
+attesting that three providers had verified a valid mobile number. Those layers
+now report `not_applicable` ("no dialable phone number on the lead",
+`Leads::Normalizer.dialable?`, ≥ 7 digits), two of the three are required, so the
+verdict caps at REVIEW with flag `required_layer_unjudged` — and settlement
+refunds the checks that never ran. Without it a lead could dodge compliance
+screening by omitting the field the compliance layers key on.
 
 ### Calibration against the twelve (not hardcoded)
 
@@ -312,7 +324,13 @@ gets 404 on `/app/*` (they have no account to view).
   answers the original lead with 200. The stream token is only re-issued when
   the resubmission's normalized identity matches — session ids are
   client-generated and guessable, so naming one is not enough to be handed a
-  live feed of someone else's verification.
+  live feed of someone else's verification. The 200 carries `replayed: true` and
+  **the panel says so**: it is about to replay that lead's history, which paints
+  the same layers and the same banner as a fresh run, and a silent replay is
+  indistinguishable from a second verification that happened to agree. The demo
+  form also holds its own submit button until the verdict lands — the server is
+  what makes a double-click harmless, but a form that invites the click invites
+  the doubt.
 - **Stream auth**: the 201 carries a signed, 15-minute, single-lead token
   (`Rails.application.message_verifier`); the Cable channel and the polling
   endpoint both verify it and reject without it. Cable's origin forgery
@@ -329,11 +347,13 @@ gets 404 on `/app/*` (they have no account to view).
   "on" whether or not it is ticked, and `raw_payload` is consent evidence, so
   the box is recorded as the visitor left it, exactly as a native form post
   would carry it. Whether consent is *provable* remains the TrustedForm
-  layer's voice. The demo form additionally marks the box `required`: a lead
-  the buyer could never legally dial is refused by the browser before a
-  request is made or a credit spent. The pixel itself stays permissive —
-  buyer pages it is dropped on may not have the attribute, and it records
-  whichever form it serves truthfully (the system spec emulates such a page).
+  layer's voice. The demo form additionally marks the box `required` and
+  constrains the phone field's shape: a lead the buyer could never legally dial
+  is refused by the browser before a request is made or a credit spent. Those
+  are courtesies, not controls — the browser belongs to whoever is submitting,
+  so every one of them is enforced again server-side, and the pixel itself stays
+  permissive because the buyer pages it is dropped on may not have the
+  attributes at all (a system spec strips them to emulate one that does not).
 
 ## 9. Real-time (Q12, Q13)
 

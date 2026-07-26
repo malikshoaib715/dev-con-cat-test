@@ -16,6 +16,8 @@ module Layers
     REGISTRIES = { "national_dnc" => "National", "state_dnc" => "State" }.freeze
 
     def call
+      return no_dialable_phone unless dialable_phone?
+
       status = payload["dnc_status"]
       return listed(status) if LISTED_DETAILS.key?(status)
       return window_closed if payload["callback_window_open"] == false
