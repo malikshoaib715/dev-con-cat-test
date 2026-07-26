@@ -64,6 +64,12 @@ FileUtils.chdir APP_ROOT do
     system! "bin/rails db:prepare"
   end
 
+  # The stylesheet is a build artifact and is not committed. bin/dev's watcher
+  # would build it anyway; doing it here means a server started any other way
+  # (or a test run) is styled too.
+  puts "\n== Building assets =="
+  system! "bin/rails tailwindcss:build"
+
   puts "\n== Removing old logs and tempfiles =="
   system! "bin/rails log:clear tmp:clear"
 
