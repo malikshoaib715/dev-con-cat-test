@@ -9,6 +9,8 @@
             <%= nav_link_to "Leads", app_leads_path %>
             <%= nav_link_to "Review queue", app_leads_path(verdict: "review"), badge_count: review_queue_count %>
             <%= nav_link_to "Pixels", app_pixels_path %>
+            <%= nav_link_to "Certificates", app_certificates_path %>
+            <%= nav_link_to "Credits", app_credits_path %>
           <% elsif current_user.super_admin? %>
             <%# A platform operator has no tenant of their own, so none of the
                 account surfaces mean anything to them. %>

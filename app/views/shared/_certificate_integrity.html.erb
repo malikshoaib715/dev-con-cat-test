@@ -1,0 +1,23 @@
+<%# locals: (certificate:, report:) %>
+<%# Recomputed in front of the reader rather than asserted: the digest stored at
+    issuance, the digest the evidence hashes to now, and the link back to the
+    certificate before it. %>
+<h2 class="text-sm font-semibold uppercase tracking-wide text-slate-500">Integrity</h2>
+<dl class="mt-3 space-y-2">
+  <div>
+    <dt class="text-slate-500">Recorded digest</dt>
+    <dd class="break-all font-mono"><%= certificate.evidence_hash %></dd>
+  </div>
+  <div>
+    <dt class="text-slate-500">Recomputed from the evidence above</dt>
+    <dd class="break-all font-mono <%= report.hash_valid ? "text-slate-700" : "text-rose-700" %>">
+      <%= report.expected_hash %>
+    </dd>
+  </div>
+  <div>
+    <dt class="text-slate-500">Previous certificate's digest</dt>
+    <dd class="break-all font-mono <%= report.chain_valid ? "text-slate-700" : "text-rose-700" %>">
+      <%= certificate.previous_hash || "— first certificate issued to this account" %>
+    </dd>
+  </div>
+</dl>

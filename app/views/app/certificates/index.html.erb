@@ -1,0 +1,57 @@
+<% content_for :title, "Certificates" %>
+
+<div class="flex items-baseline justify-between">
+  <div>
+    <h1 class="text-xl font-semibold">Consent certificates</h1>
+    <p class="mt-1 text-sm text-slate-500">
+      One per completed verification, each naming the digest of the one before it.
+    </p>
+  </div>
+  <p class="text-sm text-slate-500"><%= pluralize(@pagy.count, "certificate") %></p>
+</div>
+
+<div class="mt-4 overflow-hidden rounded-lg border border-slate-200 bg-white">
+  <table class="min-w-full divide-y divide-slate-200 text-sm">
+    <thead class="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
+      <tr>
+        <th class="px-4 py-3 font-medium">Certificate</th>
+        <th class="px-4 py-3 font-medium">Lead</th>
+        <th class="px-4 py-3 font-medium">Verdict</th>
+        <th class="px-4 py-3 font-medium">Chain</th>
+        <th class="px-4 py-3 font-medium">Issued</th>
+      </tr>
+    </thead>
+
+    <tbody class="divide-y divide-slate-100">
+      <% @certificates.each do |certificate| %>
+        <tr class="hover:bg-slate-50">
+          <td class="px-4 py-3">
+            <%= link_to certificate.public_id, app_certificate_path(certificate),
+                        class: "font-mono text-xs text-slate-900 hover:underline" %>
+          </td>
+          <td class="px-4 py-3">
+            <%= link_to certificate.lead.public_id, app_lead_path(certificate.lead),
+                        class: "font-mono text-xs text-slate-600 hover:underline" %>
+          </td>
+          <td class="px-4 py-3"><%= verdict_badge(certificate.verdict) %></td>
+          <td class="px-4 py-3 text-slate-500">#<%= certificate.sequence_number %></td>
+          <td class="px-4 py-3 text-slate-500">
+            <%= certificate.issued_at.strftime("%d %b %Y %H:%M") %>
+          </td>
+        </tr>
+      <% end %>
+
+      <% if @certificates.empty? %>
+        <tr>
+          <td colspan="5" class="px-4 py-10 text-center text-slate-500">
+            No certificates yet. One is issued for every verification that reaches a verdict.
+          </td>
+        </tr>
+      <% end %>
+    </tbody>
+  </table>
+</div>
+
+<% if @pagy.pages > 1 %>
+  <div class="mt-4 text-sm"><%== pagy_nav(@pagy) %></div>
+<% end %>

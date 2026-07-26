@@ -7,10 +7,17 @@ module App
   class BaseController < ApplicationController
     before_action :require_account
 
-    after_action :verify_authorized,     except: :index
-    after_action :verify_policy_scoped,  only:   :index
+    # Conditioned on the action name rather than declared with `only:`, because
+    # not every controller in this namespace has an index — a singular resource
+    # would otherwise fail on a callback naming an action it does not define.
+    after_action :verify_authorized,    unless: :listing?
+    after_action :verify_policy_scoped, if:     :listing?
 
     private
+
+    def listing?
+      action_name == "index"
+    end
 
     def current_account
       current_user.account

@@ -51,6 +51,9 @@ Rails.application.routes.draw do
     # Looked up by public_id, never by row id: the px_… identifier is the one the
     # buyer sees in their own snippet.
     resources :pixels
+    resources :certificates, only: %i[index show]
+    # Singular: an account has one ledger, and nothing here is writable.
+    resource :credits, only: :show, controller: "credits"
   end
 
   # Never unauthenticated: the job console exposes lead payloads in job
