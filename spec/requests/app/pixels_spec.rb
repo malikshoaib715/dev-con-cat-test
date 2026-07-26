@@ -66,6 +66,35 @@ RSpec.describe "App::Pixels", type: :request do
         enabled_layers: [ "anura", "dnc" ] }
     end
 
+    it "offers an admin a form listing only the layers the plan includes" do
+      sign_in admin
+
+      get new_app_pixel_path
+
+      expect(response).to have_http_status(:ok)
+      expect(response.body).to include("pixel_enabled_layers_anura")
+      expect(response.body).not_to include("pixel_enabled_layers_voice")
+    end
+
+    it "offers an admin the edit form with the pixel's current shape in it" do
+      sign_in admin
+
+      get edit_app_pixel_path(pixel)
+
+      expect(response).to have_http_status(:ok)
+      expect(response.body).to include("Quote page")
+    end
+
+    it "refuses a member both forms, not just the buttons to them" do
+      sign_in member
+
+      get new_app_pixel_path
+      expect(response).to have_http_status(:forbidden)
+
+      get edit_app_pixel_path(pixel)
+      expect(response).to have_http_status(:forbidden)
+    end
+
     it "lets an account admin create a pixel and records what changed" do
       sign_in admin
 
